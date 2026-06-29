@@ -11,6 +11,8 @@ import { useWebRTC } from '../hooks/useWebRTC';
 import VideoPlayer from '../components/stream/VideoPlayer';
 import StreamControls from '../components/stream/StreamControls';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import ChatBox from '../components/chat/ChatBox';
+import { useChat } from '../hooks/useChat';
 
 export default function StreamPage() {
   const { streamKey } = useParams();
@@ -41,7 +43,7 @@ export default function StreamPage() {
     connectionState,
     error: webrtcError,
   } = useWebRTC({ socket, streamKey, isBroadcaster });
-
+  const { messages, inputText, setInputText, sendMessage, handleKeyDown, error: chatError, bottomRef } = useChat({ socket, streamKey, user });
   // ─── Load stream info ───────────────────────────────────────────────────
 
   useEffect(() => {
@@ -230,15 +232,16 @@ export default function StreamPage() {
 
         {/* Right: Chat — placeholder, filled in Phase 5 */}
         <div className="w-full lg:w-80 xl:w-96 flex-shrink-0">
-          <div className="bg-dark-surface border border-dark-border rounded-lg flex flex-col"
-               style={{ height: '500px' }}>
-            <div className="p-3 border-b border-dark-border">
-              <h2 className="text-text-primary font-semibold text-sm">Stream Chat</h2>
-            </div>
-            <div className="flex-1 flex items-center justify-center text-text-muted text-sm">
-              Chat coming in Phase 5
-            </div>
-          </div>
+          <ChatBox
+            messages={messages}
+            inputText={inputText}
+            setInputText={setInputText}
+            sendMessage={sendMessage}
+            handleKeyDown={handleKeyDown}
+            error={chatError}
+            bottomRef={bottomRef}
+            user={user}
+          />
         </div>
       </div>
     </div>

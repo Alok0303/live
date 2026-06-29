@@ -7,6 +7,7 @@
 
 const logger = require('../utils/logger');
 const streamService = require('../services/stream.service');
+const registerChatHandlers = require('./chatHandler');
 
 // Track which sockets are in which rooms
 // roomViewers: Map<streamKey, Set<socketId>>
@@ -20,6 +21,9 @@ function setupSocket(io) {
 
   io.on('connection', (socket) => {
     logger.info(`Socket connected: ${socket.id}`);
+
+    // ─── Chat ────────────────────────────────────────────────────────────────
+    registerChatHandlers(io, socket);
 
     // Helper function to handle a viewer ready/joining logic cleanly
     const handleViewerReady = (streamKey) => {
