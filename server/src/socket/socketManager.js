@@ -37,12 +37,23 @@ function setupSocket(io) {
       }
 
       // Tell the broadcaster a new viewer joined (triggers offer creation)
+      // Small delay before telling broadcaster about new viewer.
+      // This gives the viewer's socket time to register its
+      // webrtc:offer listener before the offer arrives.
       const broadcasterSocketId = broadcasters.get(streamKey);
       if (broadcasterSocketId) {
-        logger.debug(`Notifying broadcaster (${broadcasterSocketId}) that viewer (${socket.id}) is ready.`);
-        io.to(broadcasterSocketId).emit('viewer:joined', {
-          viewerSocketId: socket.id,
-        });
+        // 800ms delay — gives viewer's React component time to fully
+        // mount and register the webrtc:offer socket listener
+        setTimeout(() => {
+          // Verify viewer is still connected before sending
+          const viewerSocket = io.sockets.sockets.get(socket.id);
+          if (viewerSocket) {
+            io.to(broadcasterSocketId).emit('viewer:joined', {
+              viewerSocketId: socket.id,
+            });
+            logger.info(`Notified broadcaster of viewer: ${socket.id}`);
+          }
+        }, 800);
       }
 
       // Broadcast updated viewer count to everyone in the room

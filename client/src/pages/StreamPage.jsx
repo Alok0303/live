@@ -60,17 +60,14 @@ export default function StreamPage() {
   useEffect(() => {
     if (!socket || !stream) return;
 
-    // FIX: Wait for socket to be connected before joining
-    // On first load the socket may still be handshaking
     const joinRoom = () => {
-      console.log('Joining room:', streamKey, 'as', isBroadcaster ? 'broadcaster' : 'viewer');
+      console.log('Joining room:', streamKey, 'broadcaster:', isBroadcaster);
       socket.emit('stream:join', { streamKey, isBroadcaster });
     };
 
     if (socket.connected) {
       joinRoom();
     } else {
-      // Socket not ready yet — wait for connect event
       socket.once('connect', joinRoom);
     }
 
@@ -88,7 +85,9 @@ export default function StreamPage() {
       socket.off('stream:started');
       socket.off('stream:ended');
     };
-  }, [socket, stream, streamKey, isBroadcaster, stopStream]);
+  // ← stopStream removed from deps — it's now stable (empty useCallback)
+  // ← this effect will only ever run once per socket/stream change
+  }, [socket, stream, streamKey, isBroadcaster]); // eslint-disable-line
 
   // ─── Broadcaster actions ────────────────────────────────────────────────
 
