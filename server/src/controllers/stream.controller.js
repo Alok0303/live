@@ -9,23 +9,31 @@ const streamController = {
   // POST /api/streams  — create a new stream
   createStream(req, res, next) {
     try {
-      const { title } = req.body;
+      const { title, description, category } = req.body;
       const userId = req.user.id;
 
-      const stream = streamService.createStream({ userId, title });
+      const stream = streamService.createStream({ userId, title, description, category });
 
       logger.info(`Stream created: ${stream.stream_key} by ${req.user.username}`);
       res.status(201).json({ stream });
 
     } catch (err) {
+      // 409 = user already has a live stream — return the existing one
+      if (err.status === 409 && err.existingStream) {
+        return res.status(409).json({
+          error: err.message,
+          existingStream: err.existingStream,
+        });
+      }
       next(err);
     }
   },
 
   // GET /api/streams  — get all live streams (homepage)
-  getLiveStreams(_req, res, next) {
+  getLiveStreams(req, res, next) {
     try {
-      const streams = streamService.getLiveStreams();
+      const { category } = req.query;
+      const streams = streamService.getLiveStreams({ category });
       res.json({ streams });
     } catch (err) {
       next(err);
@@ -74,6 +82,26 @@ const streamController = {
     try {
       const streams = streamService.getStreamsByUser(req.user.id);
       res.json({ streams });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // GET /api/streams/categories  — list of valid categories
+  getCategories(_req, res, next) {
+    try {
+      const categories = streamService.getCategories();
+      res.json({ categories });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // GET /api/streams/my/active  — get current user's active live stream (if any)
+  getActiveStream(req, res, next) {
+    try {
+      const stream = streamService.getActiveStream(req.user.id);
+      res.json({ stream: stream || null });
     } catch (err) {
       next(err);
     }

@@ -13,6 +13,7 @@ import RegisterPage from './pages/RegisterPage';
 import GoLivePage from './pages/GoLivePage';
 import StreamPage from './pages/StreamPage';
 import ProfilePage from './pages/ProfilePage';
+import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
   return (
@@ -34,6 +35,9 @@ export default function App() {
                 {/* Protected routes — require login */}
                 <Route path="/go-live" element={
                   <ProtectedRoute><GoLivePage /></ProtectedRoute>
+                } />
+                <Route path="/settings" element={
+                  <ProtectedRoute><SettingsPage /></ProtectedRoute>
                 } />
 
                 {/* 404 */}

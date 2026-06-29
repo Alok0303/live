@@ -1,17 +1,30 @@
 // GoLivePage.jsx
 // Where a logged-in user sets up and starts their stream.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 
+const TITLE_MAX    = 100;
+const DESC_MAX     = 300;
+
 export default function GoLivePage() {
-  const [title, setTitle] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [title,       setTitle]       = useState('');
+  const [description, setDescription] = useState('');
+  const [category,    setCategory]    = useState('Just Chatting');
+  const [categories,  setCategories]  = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState('');
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  // Fetch available categories from server
+  useEffect(() => {
+    apiClient.get('/streams/categories')
+      .then(res => setCategories(res.data.categories))
+      .catch(() => setCategories(['Just Chatting', 'Gaming', 'Music', 'Art', 'IRL', 'Science & Technology', 'Sports']));
+  }, []);
 
   const handleStart = async (e) => {
     e.preventDefault();
@@ -24,7 +37,11 @@ export default function GoLivePage() {
 
     try {
       // Create the stream record in DB
-      const res = await apiClient.post('/streams', { title: title.trim() });
+      const res = await apiClient.post('/streams', {
+        title:       title.trim(),
+        description: description.trim(),
+        category,
+      });
       const { stream_key } = res.data.stream;
 
       // Navigate to the streamer view with this stream key
@@ -52,22 +69,63 @@ export default function GoLivePage() {
 
           {/* Stream title */}
           <div>
-            <label className="block text-text-secondary text-sm mb-1.5">Stream title</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-text-secondary text-sm">Stream title *</label>
+              <span className={`text-xs ${title.length > TITLE_MAX * 0.9 ? 'text-yellow-500' : 'text-text-muted'}`}>
+                {title.length}/{TITLE_MAX}
+              </span>
+            </div>
             <input
               type="text"
               value={title}
               onChange={e => { setTitle(e.target.value); setError(''); }}
               placeholder="What are you streaming today?"
               className="input-field"
-              maxLength={100}
+              maxLength={TITLE_MAX}
               autoFocus
+              required
+            />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="block text-text-secondary text-sm mb-1.5">Category</label>
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              className="input-field bg-dark-surface appearance-none cursor-pointer"
+            >
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Description */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-text-secondary text-sm">Description</label>
+              <span className={`text-xs ${description.length > DESC_MAX * 0.9 ? 'text-yellow-500' : 'text-text-muted'}`}>
+                {description.length}/{DESC_MAX}
+              </span>
+            </div>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="Tell viewers what you'll be doing..."
+              className="input-field resize-none"
+              rows={3}
+              maxLength={DESC_MAX}
             />
           </div>
 
           {/* Streamer info */}
           <div className="flex items-center gap-3 bg-dark-base rounded-md p-3">
-            <div className="w-9 h-9 rounded-full bg-brand flex items-center justify-center text-white font-bold flex-shrink-0">
-              {user.username[0].toUpperCase()}
+            <div className="w-9 h-9 rounded-full bg-brand flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden">
+              {user.avatar_url
+                ? <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+                : user.username[0].toUpperCase()
+              }
             </div>
             <div>
               <p className="text-text-primary text-sm font-medium">{user.username}</p>

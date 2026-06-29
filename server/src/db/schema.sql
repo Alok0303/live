@@ -19,9 +19,12 @@ CREATE TABLE IF NOT EXISTS streams (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
   title TEXT NOT NULL DEFAULT 'My Live Stream',
+  description TEXT DEFAULT '',
+  category TEXT DEFAULT 'Just Chatting',
   stream_key TEXT UNIQUE NOT NULL,  -- unique URL token (e.g. "abc-123-xyz")
   is_live INTEGER DEFAULT 0,        -- SQLite uses 0/1 for boolean
   viewer_count INTEGER DEFAULT 0,
+  peak_viewer_count INTEGER DEFAULT 0,
   thumbnail_url TEXT DEFAULT NULL,
   started_at DATETIME DEFAULT NULL,
   ended_at DATETIME DEFAULT NULL,
@@ -44,3 +47,6 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_streams_user_id ON streams(user_id);
 CREATE INDEX IF NOT EXISTS idx_streams_is_live ON streams(is_live);
 CREATE INDEX IF NOT EXISTS idx_messages_stream_id ON messages(stream_id);
+
+-- Safe migrations for existing databases (adding columns if they don't exist yet)
+-- SQLite doesn't support IF NOT EXISTS on ALTER TABLE, so we wrap in a try block at runtime.

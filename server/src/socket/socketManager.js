@@ -2,7 +2,7 @@
 // Manages all Socket.IO events:
 //   - WebRTC signaling (offer/answer/ICE candidates)
 //   - Stream rooms (join/leave)
-//   - Viewer counting
+//   - Viewer counting (per-room + global lobby broadcast)
 // This file is the heart of real-time communication.
 
 const logger = require('../utils/logger');
@@ -17,6 +17,9 @@ const roomViewers = new Map();
 // broadcasters: Map<streamKey, socketId>
 const broadcasters = new Map();
 
+// Special room name every homepage visitor joins to receive live feed updates
+const LOBBY_ROOM = '__lobby__';
+
 function setupSocket(io) {
 
   io.on('connection', (socket) => {
@@ -24,6 +27,26 @@ function setupSocket(io) {
 
     // ─── Chat ────────────────────────────────────────────────────────────────
     registerChatHandlers(io, socket);
+
+    // ─── Lobby (homepage real-time updates) ──────────────────────────────────
+    // Any client can subscribe to global stream updates (viewer counts, new streams)
+    socket.on('lobby:join', () => {
+      socket.join(LOBBY_ROOM);
+      logger.debug(`Socket ${socket.id} joined lobby`);
+    });
+
+    socket.on('lobby:leave', () => {
+      socket.leave(LOBBY_ROOM);
+      logger.debug(`Socket ${socket.id} left lobby`);
+    });
+
+    // Helper: broadcast updated viewer count for a stream to both the room AND the lobby
+    const broadcastViewerCount = (streamKey, count) => {
+      // Tell everyone watching the stream
+      io.to(streamKey).emit('viewer:count', { count });
+      // Tell everyone on the homepage so StreamCard updates without polling
+      io.to(LOBBY_ROOM).emit('stream:viewer_update', { streamKey, count });
+    };
 
     // Helper function to handle a viewer ready/joining logic cleanly
     const handleViewerReady = (streamKey) => {
@@ -37,7 +60,8 @@ function setupSocket(io) {
       // Only update database and broadcast if this is a newly tracked viewer connection
       if (!viewers.has(socket.id)) {
         viewers.add(socket.id);
-        streamService.updateViewerCount(streamKey, +1);
+        const newCount = streamService.updateViewerCount(streamKey, +1);
+        broadcastViewerCount(streamKey, newCount);
       }
 
       // Tell the broadcaster a new viewer joined (triggers offer creation)
@@ -60,9 +84,6 @@ function setupSocket(io) {
         }, 800);
       }
 
-      // Broadcast updated viewer count to everyone in the room
-      const count = viewers.size;
-      io.to(streamKey).emit('viewer:count', { count });
       // Tell this specific viewer if the stream is already live
       // (they may have joined after stream:go-live was broadcast)
       const isAlreadyLive = broadcasters.has(streamKey);
@@ -134,6 +155,8 @@ function setupSocket(io) {
       logger.info(`Stream went live: ${streamKey}`);
       // Notify all viewers in the room
       socket.to(streamKey).emit('stream:started', { streamKey });
+      // Notify lobby (homepage) so the stream appears instantly
+      io.to(LOBBY_ROOM).emit('stream:went_live', { streamKey });
     });
 
     // Broadcaster ends the stream
@@ -141,6 +164,8 @@ function setupSocket(io) {
       logger.info(`Stream ended: ${streamKey}`);
       // Notify all viewers so they can show "stream ended" UI
       socket.to(streamKey).emit('stream:ended', { streamKey });
+      // Notify lobby (homepage) so the card disappears instantly
+      io.to(LOBBY_ROOM).emit('stream:went_offline', { streamKey });
       // Clean up
       broadcasters.delete(streamKey);
       roomViewers.delete(streamKey);
@@ -155,6 +180,7 @@ function setupSocket(io) {
         if (broadcasterSocketId === socket.id) {
           // Broadcaster left — notify viewers and clean up
           io.to(streamKey).emit('stream:ended', { streamKey });
+          io.to(LOBBY_ROOM).emit('stream:went_offline', { streamKey });
           broadcasters.delete(streamKey);
           roomViewers.delete(streamKey);
           logger.info(`Broadcaster left stream: ${streamKey}`);
@@ -166,12 +192,11 @@ function setupSocket(io) {
       for (const [streamKey, viewers] of roomViewers.entries()) {
         if (viewers.has(socket.id)) {
           viewers.delete(socket.id);
-          streamService.updateViewerCount(streamKey, -1);
+          const newCount = streamService.updateViewerCount(streamKey, -1);
 
-          // Tell remaining room members updated count
-          const count = viewers.size;
-          io.to(streamKey).emit('viewer:count', { count });
-          logger.info(`Viewer left stream: ${streamKey}, count now: ${count}`);
+          // Tell remaining room members and homepage the updated count
+          broadcastViewerCount(streamKey, newCount);
+          logger.info(`Viewer left stream: ${streamKey}, count now: ${newCount}`);
           break;
         }
       }

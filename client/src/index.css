@@ -63,3 +63,21 @@
            px-2 py-0.5 rounded uppercase tracking-wide;
   }
 }
+
+/* Utility: hide scrollbar but keep scroll behavior */
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}

@@ -6,16 +6,44 @@ const db = require('../db/database');
 
 const streamService = {
 
+  // Get the user's currently active (live) stream, if any
+  getActiveStream(userId) {
+    return db.prepare(
+      `SELECT s.*, u.username, u.avatar_url
+       FROM streams s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.user_id = ? AND s.is_live = 1
+       ORDER BY s.started_at DESC
+       LIMIT 1`
+    ).get(userId);
+  },
+
   // Create a new stream for a user
-  createStream({ userId, title }) {
+  // Throws if the user already has a live stream (prevents duplicates)
+  createStream({ userId, title, description, category }) {
+    // Enforce one-active-stream-per-user
+    const existing = streamService.getActiveStream(userId);
+    if (existing) {
+      const error = new Error('You already have an active live stream');
+      error.status = 409;
+      error.existingStream = existing;
+      throw error;
+    }
+
     // Generate a unique key used in the stream URL
     // e.g. "a3f9b2c1-..." → viewers go to /stream/a3f9b2c1-...
     const streamKey = uuidv4();
 
     const result = db.prepare(
-      `INSERT INTO streams (user_id, title, stream_key)
-       VALUES (?, ?, ?)`
-    ).run(userId, title || 'My Live Stream', streamKey);
+      `INSERT INTO streams (user_id, title, description, category, stream_key)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(
+      userId,
+      title || 'My Live Stream',
+      description || '',
+      category || 'Just Chatting',
+      streamKey
+    );
 
     return db.prepare(
       `SELECT s.*, u.username, u.avatar_url
@@ -26,7 +54,16 @@ const streamService = {
   },
 
   // Get all currently live streams (for homepage)
-  getLiveStreams() {
+  getLiveStreams({ category } = {}) {
+    if (category && category !== 'All') {
+      return db.prepare(
+        `SELECT s.*, u.username, u.avatar_url
+         FROM streams s
+         JOIN users u ON s.user_id = u.id
+         WHERE s.is_live = 1 AND s.category = ?
+         ORDER BY s.viewer_count DESC, s.started_at DESC`
+      ).all(category);
+    }
     return db.prepare(
       `SELECT s.*, u.username, u.avatar_url
        FROM streams s
@@ -69,7 +106,7 @@ const streamService = {
 
     db.prepare(
       `UPDATE streams
-       SET is_live = 1, started_at = CURRENT_TIMESTAMP, viewer_count = 0
+       SET is_live = 1, started_at = CURRENT_TIMESTAMP, viewer_count = 0, peak_viewer_count = 0
        WHERE stream_key = ?`
     ).run(streamKey);
 
@@ -90,7 +127,7 @@ const streamService = {
 
     db.prepare(
       `UPDATE streams
-       SET is_live = 0, ended_at = CURRENT_TIMESTAMP
+       SET is_live = 0, ended_at = CURRENT_TIMESTAMP, viewer_count = 0
        WHERE stream_key = ?`
     ).run(streamKey);
 
@@ -98,13 +135,30 @@ const streamService = {
   },
 
   // Update viewer count (called by socket events)
+  // Returns the new exact count so we can broadcast it
   updateViewerCount(streamKey, delta) {
     // delta = +1 when viewer joins, -1 when viewer leaves
     db.prepare(
       `UPDATE streams
-       SET viewer_count = MAX(0, viewer_count + ?)
+       SET viewer_count = MAX(0, viewer_count + ?),
+           peak_viewer_count = MAX(peak_viewer_count, viewer_count + ?)
        WHERE stream_key = ?`
-    ).run(delta, streamKey);
+    ).run(delta, delta, streamKey);
+
+    const row = db.prepare(
+      'SELECT viewer_count FROM streams WHERE stream_key = ?'
+    ).get(streamKey);
+
+    return row ? row.viewer_count : 0;
+  },
+
+  // Get all available categories (static list + dynamic from DB)
+  getCategories() {
+    const CATEGORIES = [
+      'Just Chatting', 'Gaming', 'Music', 'Art', 'IRL',
+      'Science & Technology', 'Sports', 'Cooking', 'Travel', 'Education',
+    ];
+    return CATEGORIES;
   },
 };
 

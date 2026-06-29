@@ -5,8 +5,9 @@ const streamController = require('../controllers/stream.controller');
 const authMiddleware = require('../middleware/auth');
 
 // Public routes
-router.get('/',              streamController.getLiveStreams);  // homepage feed
-router.get('/:streamKey',    streamController.getStream);       // single stream info
+router.get('/categories',         streamController.getCategories);   // list of categories
+router.get('/',                   streamController.getLiveStreams);   // homepage feed
+router.get('/:streamKey',         streamController.getStream);       // single stream info
 
 // Protected routes (must be logged in)
 router.post('/',                          authMiddleware, streamController.createStream);

@@ -28,6 +28,17 @@ const schemaPath = path.join(__dirname, 'schema.sql');
 const schema = fs.readFileSync(schemaPath, 'utf8');
 db.exec(schema);
 
+// ─── Runtime migrations ──────────────────────────────────────────────────────
+// SQLite doesn't support IF NOT EXISTS on ALTER TABLE, so we try/catch each.
+const migrations = [
+  `ALTER TABLE streams ADD COLUMN description TEXT DEFAULT ''`,
+  `ALTER TABLE streams ADD COLUMN category TEXT DEFAULT 'Just Chatting'`,
+  `ALTER TABLE streams ADD COLUMN peak_viewer_count INTEGER DEFAULT 0`,
+];
+for (const sql of migrations) {
+  try { db.exec(sql); } catch (_) { /* column already exists — safe to ignore */ }
+}
+
 logger.info(`Database connected: ${config.db.path}`);
 
 module.exports = db;
