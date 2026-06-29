@@ -60,16 +60,22 @@ export default function StreamPage() {
   useEffect(() => {
     if (!socket || !stream) return;
 
-    // Join the stream's socket room
-    socket.emit('stream:join', { streamKey, isBroadcaster });
+    // FIX: Wait for socket to be connected before joining
+    // On first load the socket may still be handshaking
+    const joinRoom = () => {
+      console.log('Joining room:', streamKey, 'as', isBroadcaster ? 'broadcaster' : 'viewer');
+      socket.emit('stream:join', { streamKey, isBroadcaster });
+    };
 
-    // Listen for viewer count updates
+    if (socket.connected) {
+      joinRoom();
+    } else {
+      // Socket not ready yet — wait for connect event
+      socket.once('connect', joinRoom);
+    }
+
     socket.on('viewer:count', ({ count }) => setViewerCount(count));
-
-    // Viewer: broadcaster started streaming
     socket.on('stream:started', () => setIsLive(true));
-
-    // Stream ended (broadcaster left or clicked End Stream)
     socket.on('stream:ended', () => {
       setStreamEnded(true);
       setIsLive(false);
@@ -77,6 +83,7 @@ export default function StreamPage() {
     });
 
     return () => {
+      socket.off('connect', joinRoom);
       socket.off('viewer:count');
       socket.off('stream:started');
       socket.off('stream:ended');

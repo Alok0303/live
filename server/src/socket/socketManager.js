@@ -48,6 +48,14 @@ function setupSocket(io) {
       // Broadcast updated viewer count to everyone in the room
       const count = viewers.size;
       io.to(streamKey).emit('viewer:count', { count });
+      // Tell this specific viewer if the stream is already live
+      // (they may have joined after stream:go-live was broadcast)
+      const isAlreadyLive = broadcasters.has(streamKey);
+      if (isAlreadyLive) {
+        socket.emit('stream:started', { streamKey });
+        // Also trigger a new offer from broadcaster to this viewer
+        // (broadcaster's viewer:joined handler will do this automatically)
+      }
     };
 
     // ─── Join a stream room ──────────────────────────────────────────────────
