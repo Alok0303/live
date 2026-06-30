@@ -43,3 +43,7 @@ next-env.d.ts
 
 # Ignore the entire data directory
 server/data/
+
+server/foobar.db
+server/foobar.db-shm
+server/foobar.db-wal
