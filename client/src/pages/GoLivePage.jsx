@@ -18,6 +18,7 @@ export default function GoLivePage() {
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState('');
+  const [thumbnailFile, setThumbnailFile] = useState(null);
 
   // Minimum allowed schedule time: at least 1 day from now
   const minScheduleTime = new Date(Date.now() + 24 * 60 * 60 * 1000)
@@ -69,12 +70,23 @@ export default function GoLivePage() {
     setError('');
 
     try {
+      let uploadedThumbnailUrl = null;
+      if (thumbnailFile) {
+        const formData = new FormData();
+        formData.append('thumbnail', thumbnailFile);
+        const uploadRes = await apiClient.post('/streams/upload-thumbnail', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        uploadedThumbnailUrl = uploadRes.data.url;
+      }
+
       // Create the stream record in DB
       const res = await apiClient.post('/streams', {
         title:       title.trim(),
         description: description.trim(),
         category,
         scheduledStartTime: isScheduled ? new Date(scheduledTime).toISOString() : null,
+        thumbnailUrl: uploadedThumbnailUrl
       });
       const { stream_key } = res.data.stream;
 
@@ -161,6 +173,18 @@ export default function GoLivePage() {
               rows={3}
               maxLength={DESC_MAX}
             />
+          </div>
+
+          {/* Thumbnail Upload */}
+          <div>
+            <label className="block text-text-secondary text-sm mb-1.5">Stream Thumbnail</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={e => setThumbnailFile(e.target.files[0])}
+              className="input-field cursor-pointer file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand file:text-white hover:file:bg-brand-light"
+            />
+            <p className="text-xs text-text-muted mt-1">If no image is provided, we'll pick a cute dog for you!</p>
           </div>
 
           {/* Streamer info */}

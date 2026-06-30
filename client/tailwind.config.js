@@ -7,16 +7,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        'dark-base':    '#0e0e10',
-        'dark-surface': '#18181b',
-        'dark-border':  '#2a2a2d',
-        'dark-hover':   '#3a3a3d',
-        'brand':        '#9147ff',
-        'brand-light':  '#a970ff',
-        'brand-dark':   '#772ce8',
-        'text-primary':   '#efeff1',
-        'text-secondary': '#adadb8',
-        'text-muted':     '#53535f',
+        'dark-base':    '#141414', // Pure Netflix dark background
+        'dark-surface': '#181818', // Slightly elevated surface
+        'dark-border':  '#2a2a2a',
+        'dark-hover':   '#333333',
+        'brand':        '#E50914', // Netflix Red
+        'brand-light':  '#F40612', // Light Red
+        'brand-dark':   '#B81D24', // Dark Red
+        'text-primary':   '#E5E5E5', // Netflix primary text color
+        'text-secondary': '#B3B3B3',
+        'text-muted':     '#808080',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

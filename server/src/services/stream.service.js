@@ -20,7 +20,7 @@ const streamService = {
 
   // Create a new stream for a user
   // Throws if the user already has a live stream (prevents duplicates)
-  createStream({ userId, title, description, category, isPaid = false, price = 0, scheduledStartTime = null }) {
+  createStream({ userId, title, description, category, isPaid = false, price = 0, scheduledStartTime = null, thumbnailUrl = null }) {
     // Enforce one-active-stream-per-user
     const existing = streamService.getActiveStream(userId);
     if (existing) {
@@ -63,9 +63,12 @@ const streamService = {
     // e.g. "a3f9b2c1-..." → viewers go to /stream/a3f9b2c1-...
     const streamKey = uuidv4();
 
+    // Default to a cute dog image if no thumbnail provided
+    const finalThumbnail = thumbnailUrl || `https://placedog.net/640/360?random=${Math.random()}`;
+
     const result = db.prepare(
-      `INSERT INTO streams (user_id, title, description, category, stream_key, is_paid, price, scheduled_start_time)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO streams (user_id, title, description, category, stream_key, is_paid, price, scheduled_start_time, thumbnail_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       userId,
       title || 'My Live Stream',
@@ -74,7 +77,8 @@ const streamService = {
       streamKey,
       isPaid ? 1 : 0,
       isPaid ? Math.max(0, parseInt(price)) : 0,
-      scheduledStartTime || null
+      scheduledStartTime || null,
+      finalThumbnail
     );
 
     return db.prepare(

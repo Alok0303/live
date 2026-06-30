@@ -15,7 +15,6 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import ChatBox from '../components/chat/ChatBox';
 import { useChat } from '../hooks/useChat';
 
-// Format elapsed seconds as HH:MM:SS
 function formatTime(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -24,24 +23,22 @@ function formatTime(seconds) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-// Category badge color map
 const CATEGORY_COLORS = {
-  'Gaming':               'bg-blue-900/60 text-blue-300',
-  'Music':                'bg-pink-900/60 text-pink-300',
-  'Art':                  'bg-orange-900/60 text-orange-300',
-  'IRL':                  'bg-green-900/60 text-green-300',
-  'Science & Technology': 'bg-cyan-900/60 text-cyan-300',
-  'Sports':               'bg-yellow-900/60 text-yellow-300',
-  'Cooking':              'bg-red-900/60 text-red-300',
-  'Travel':               'bg-teal-900/60 text-teal-300',
-  'Education':            'bg-purple-900/60 text-purple-300',
-  'Just Chatting':        'bg-gray-700/60 text-gray-300',
+  'Gaming':               'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  'Music':                'bg-pink-500/20 text-pink-300 border-pink-500/30',
+  'Art':                  'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  'IRL':                  'bg-green-500/20 text-green-300 border-green-500/30',
+  'Science & Technology': 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  'Sports':               'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+  'Cooking':              'bg-red-500/20 text-red-300 border-red-500/30',
+  'Travel':               'bg-teal-500/20 text-teal-300 border-teal-500/30',
+  'Education':            'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  'Just Chatting':        'bg-zinc-500/20 text-zinc-300 border-zinc-500/30',
 };
 
 export default function StreamPage() {
   const { streamKey } = useParams();
   const [searchParams] = useSearchParams();
-
   const socket   = useSocket();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -53,42 +50,28 @@ export default function StreamPage() {
   const [streamEnded, setStreamEnded] = useState(false);
   const [isLive, setIsLive]           = useState(false);
   const [pageError, setPageError]     = useState('');
-  const isBroadcaster = searchParams.get('mode') === 'broadcast' || 
+  const isBroadcaster = searchParams.get('mode') === 'broadcast' ||
                         (user && stream && user.id === stream.user_id);
-  // Broadcaster duration timer
   const [duration, setDuration] = useState(0);
   const durationRef = useRef(null);
 
-  // Broadcaster media/peer state lives in the global BroadcastContext so it
-  // survives navigation. Viewers keep a local, page-scoped connection.
   const broadcastCtx = useBroadcast();
   const viewerWebRTC = useWebRTC({ socket, streamKey, isBroadcaster: false });
 
   const {
-    localVideoRef,
-    remoteVideoRef,
-    stopStream,
-    toggleMute,
-    toggleCamera,
-    isStreaming,
-    isMuted,
-    isCameraOff,
-    connectionState,
-    error: webrtcError,
+    localVideoRef, remoteVideoRef,
+    stopStream, toggleMute, toggleCamera,
+    isStreaming, isMuted, isCameraOff,
+    connectionState, error: webrtcError,
   } = isBroadcaster ? broadcastCtx : viewerWebRTC;
 
-  // Re-attach the local preview <video> element whenever this page (re)mounts
-  // while already broadcasting (e.g. you navigated away and came back).
   useEffect(() => {
     if (isBroadcaster && localVideoRef.current && broadcastCtx.localStreamRef?.current) {
       localVideoRef.current.srcObject = broadcastCtx.localStreamRef.current;
     }
   }, [isBroadcaster, localVideoRef, broadcastCtx.localStreamRef]);
 
-
   const { messages, inputText, setInputText, sendMessage, handleKeyDown, error: chatError, bottomRef } = useChat({ socket, streamKey, user });
-
-  // ─── Load stream info ───────────────────────────────────────────────────
 
   useEffect(() => {
     apiClient.get(`/streams/${streamKey}`)
@@ -102,36 +85,24 @@ export default function StreamPage() {
       .finally(() => setLoading(false));
   }, [streamKey]);
 
-  // ─── Join socket room ───────────────────────────────────────────────────
-
   useEffect(() => {
     if (!socket || !stream || !user) return;
-
     const joinRoom = () => {
       console.log('Joining room:', streamKey, 'broadcaster:', isBroadcaster);
       socket.emit('stream:join', { streamKey, isBroadcaster, userId: user?.id });
     };
-
-    if (socket.connected) {
-      joinRoom();
-    }
+    if (socket.connected) joinRoom();
     socket.on('connect', joinRoom);
-
     socket.on('viewer:count', ({ count }) => {
       setViewerCount(count);
       setPeakViewers(prev => Math.max(prev, count));
     });
     socket.on('stream:started', () => setIsLive(true));
-    socket.on('stream:ended', () => {
-      setStreamEnded(true);
-      setIsLive(false);
-      stopStream();
-    });
+    socket.on('stream:ended', () => { setStreamEnded(true); setIsLive(false); stopStream(); });
     socket.on('stream:broadcast-rejected', ({ reason }) => {
       setPageError(reason || 'This stream is already being broadcast elsewhere.');
       navigate('/');
     });
-
     return () => {
       socket.off('connect', joinRoom);
       socket.off('viewer:count');
@@ -139,41 +110,27 @@ export default function StreamPage() {
       socket.off('stream:ended');
       socket.off('stream:broadcast-rejected');
     };
-  // ← stopStream removed from deps — it's now stable (empty useCallback)
-  // ← this effect will only ever run once per socket/stream change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, stream, streamKey, isBroadcaster, user]);
 
-  // ─── Viewer: leave cleanly on unmount/navigation ────────────────────────
-  // The socket is app-level and survives route changes, so we have to tell
-  // the server explicitly when a viewer navigates away — otherwise the
-  // server (and the broadcaster's stale peer connection) never finds out,
-  // and re-entering the stream later can get stuck.
   useEffect(() => {
     if (!socket || isBroadcaster) return;
     return () => {
       socket.emit('stream:leave', { streamKey });
       viewerWebRTC.stopStream();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, streamKey, isBroadcaster]);
-
-  // ─── Broadcaster duration timer ─────────────────────────────────────────
 
   useEffect(() => {
     if (isStreaming && !durationRef.current) {
       durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
     }
     if (!isStreaming && durationRef.current) {
-      clearInterval(durationRef.current);
-      durationRef.current = null;
-      setDuration(0);
+      clearInterval(durationRef.current); durationRef.current = null; setDuration(0);
     }
-    return () => {
-      if (durationRef.current) clearInterval(durationRef.current);
-    };
+    return () => { if (durationRef.current) clearInterval(durationRef.current); };
   }, [isStreaming]);
-
-  // ─── Broadcaster actions ────────────────────────────────────────────────
 
   const handleStartWebcam = async () => {
     try {
@@ -182,8 +139,6 @@ export default function StreamPage() {
       socket.emit('stream:go-live', { streamKey });
       setIsLive(true);
     } catch (err) {
-      // Surface the failure instead of swallowing it — if going live in the
-      // DB fails, the broadcaster needs to know, or no one will ever see them.
       setPageError(err.response?.data?.error || 'Failed to go live. Please try again.');
       broadcastCtx.endBroadcast();
     }
@@ -208,213 +163,218 @@ export default function StreamPage() {
     navigate('/');
   };
 
-  
-
-  // ─── Render ─────────────────────────────────────────────────────────────
-
+  // ─── Loading / Error ────────────────────────────────────────────────────
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
       <LoadingSpinner size="lg" />
     </div>
   );
 
-  if (pageError) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <p className="text-text-secondary text-lg mb-4">{pageError}</p>
-        <button onClick={() => navigate('/')} className="btn-secondary">Back to Home</button>
+  if (pageError && !stream) return (
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <div className="text-6xl">📡</div>
+        <p className="text-text-secondary text-lg">{pageError}</p>
+        <button onClick={() => navigate('/')} className="btn-primary">Back to Home</button>
       </div>
     </div>
   );
 
   const catColor = CATEGORY_COLORS[stream?.category] || CATEGORY_COLORS['Just Chatting'];
-
-  // Compute whether broadcaster is too early to start
   const minutesUntilScheduled = stream?.scheduled_start_time
     ? (new Date(stream.scheduled_start_time) - Date.now()) / 60000
     : null;
   const isTooEarlyToStart = minutesUntilScheduled !== null && minutesUntilScheduled > 10;
 
+  // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-7xl mx-auto px-4 py-4">
-      {/* Stream ended banner */}
+    <div className="min-h-screen bg-[#0a0a0a] text-text-primary flex flex-col">
+
+      {/* Stream-ended banner */}
       {streamEnded && (
-        <div className="bg-dark-surface border border-dark-border rounded-lg p-4 mb-4 text-center">
-          <p className="text-text-secondary">This stream has ended.</p>
-          <button onClick={() => navigate('/')} className="btn-secondary text-sm mt-2">
-            Back to Home
+        <div className="bg-brand/10 border-b border-brand/30 px-6 py-3 flex items-center justify-between">
+          <p className="text-text-secondary text-sm">This stream has ended.</p>
+          <button onClick={() => navigate('/')} className="btn-primary text-sm py-1 px-4">
+            Browse Streams
           </button>
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row gap-4">
-        {/* Left: Video + info + controls */}
-        <div className="flex-1 min-w-0 flex flex-col gap-3">
+      {/* Main layout */}
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0 pt-16">
 
-          {/* Video */}
-          {isBroadcaster ? (
-            /* Broadcaster sees their own local preview */
-            <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
-              <video
-                ref={localVideoRef}
-                autoPlay
-                muted   /* muted so you don't hear yourself */
-                playsInline
-                className="w-full h-full object-cover"
-              />
-              {!isStreaming && (
-                <div className="absolute inset-0 flex items-center justify-center bg-dark-base">
-                  <div className="text-center text-text-muted flex flex-col items-center px-4">
-                    {isTooEarlyToStart ? (
-                      <>
-                        <div className="text-5xl mb-3">🔒</div>
-                        <p className="text-brand font-bold text-lg">Too early to go live</p>
-                        <p className="text-sm mt-2">
-                          Your stream is scheduled for <br />
-                          <span className="text-white font-semibold">
-                            {new Date(stream.scheduled_start_time).toLocaleString()}
-                          </span>
-                        </p>
-                        <p className="text-xs text-text-muted mt-2">
-                          You can go live within 10 minutes of the scheduled time.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <div className="text-5xl mb-3">🎥</div>
-                        {stream?.scheduled_start_time && (
-                          <p className="text-sm font-semibold text-brand mb-1">
-                            Scheduled for {new Date(stream.scheduled_start_time).toLocaleString()}
+        {/* ── Left: Video + Info + Controls ── */}
+        <div className="flex-1 min-w-0 flex flex-col">
+
+          {/* Video area */}
+          <div className="w-full bg-black">
+            {isBroadcaster ? (
+              <div className="relative w-full aspect-video bg-black">
+                <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                {!isStreaming && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a]">
+                    <div className="text-center px-6 max-w-sm">
+                      {isTooEarlyToStart ? (
+                        <>
+                          <div className="text-5xl mb-4 opacity-60">🔒</div>
+                          <p className="text-brand font-bold text-lg mb-2">Too early to go live</p>
+                          <p className="text-text-secondary text-sm">
+                            Scheduled for <span className="text-white font-semibold">{new Date(stream.scheduled_start_time).toLocaleString()}</span>
                           </p>
-                        )}
-                        <p className="text-sm mt-1">Choose a source below to start</p>
-                      </>
-                    )}
+                          <p className="text-text-muted text-xs mt-2">You can go live within 10 minutes of the scheduled time.</p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-5xl mb-4 opacity-60">🎥</div>
+                          {stream?.scheduled_start_time && (
+                            <p className="text-brand text-sm font-semibold mb-2">
+                              Scheduled for {new Date(stream.scheduled_start_time).toLocaleString()}
+                            </p>
+                          )}
+                          <p className="text-text-muted text-sm">Choose a source below to start broadcasting</p>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-              {/* Live indicator overlay */}
-              {isStreaming && (
-                <div className="absolute top-3 left-3 flex items-center gap-2">
-                  <span className="live-badge">● LIVE</span>
-                  <span className="bg-black/70 text-white text-xs font-mono px-2 py-0.5 rounded">
-                    {formatTime(duration)}
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : stream?.scheduled_start_time && !isLive ? (
-            /* Viewer sees countdown / waiting room */
-            <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden flex flex-col items-center justify-center text-center p-6">
-              <div className="text-6xl mb-4">⏳</div>
-              <h2 className="text-2xl font-bold text-white mb-2">Upcoming Stream</h2>
-              <p className="text-brand font-semibold text-lg mb-1">
-                Starts at {new Date(stream.scheduled_start_time).toLocaleString()}
-              </p>
-              <p className="text-text-muted text-sm mt-4">
-                The stream will begin automatically when the broadcaster goes live. Hang tight!
-              </p>
-            </div>
-          ) : (
-            /* Viewer sees incoming remote stream */
-            <VideoPlayer
-              videoRef={remoteVideoRef}
-              connectionState={connectionState}
-              isLive={isLive}
-            />
-          )}
-
-          {/* WebRTC error */}
-          {webrtcError && (
-            <div className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-3 py-2 rounded-md">
-              {webrtcError}
-            </div>
-          )}
-
-          {/* Go-live failure (e.g. DB update failed even though camera started) */}
-          {isBroadcaster && pageError && (
-            <div className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-3 py-2 rounded-md">
-              {pageError}
-            </div>
-          )}
-
-          {/* Stream info bar */}
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                {isLive
-                  ? <span className="live-badge">● Live</span>
-                  : <span className="bg-dark-hover text-text-secondary text-xs font-bold px-2 py-0.5 rounded uppercase">Offline</span>
-                }
-                <h1 className="text-text-primary font-semibold truncate">{stream?.title}</h1>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-text-secondary text-sm">{stream?.username}</p>
-                {stream?.category && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${catColor}`}>
-                    {stream.category}
-                  </span>
+                )}
+                {isStreaming && (
+                  <div className="absolute top-3 left-3 flex items-center gap-2">
+                    <span className="flex items-center gap-1.5 bg-brand text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-[0_0_12px_rgba(229,9,20,0.7)]">
+                      <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
+                    </span>
+                    <span className="bg-black/80 backdrop-blur-sm text-white text-xs font-mono px-2 py-0.5 rounded-full border border-white/10">
+                      {formatTime(duration)}
+                    </span>
+                  </div>
                 )}
               </div>
-              {/* Description */}
-              {stream?.description && (
-                <p className="text-text-muted text-xs mt-1.5 leading-relaxed line-clamp-2">
-                  {stream.description}
-                </p>
-              )}
-            </div>
-            <div className="text-text-secondary text-sm flex-shrink-0 flex items-center gap-1">
-              <span>👁</span>
-              <span className="font-medium">{viewerCount.toLocaleString()}</span>
-            </div>
-          </div>
-
-          {/* Broadcaster stats panel */}
-          {isBroadcaster && isStreaming && (
-            <div className="bg-dark-surface border border-dark-border rounded-lg p-3 grid grid-cols-3 gap-3 text-center">
-              <div>
-                <p className="text-text-muted text-xs mb-0.5">Duration</p>
-                <p className="text-text-primary font-mono font-semibold">{formatTime(duration)}</p>
-              </div>
-              <div>
-                <p className="text-text-muted text-xs mb-0.5">Viewers</p>
-                <p className="text-text-primary font-semibold">{viewerCount.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-text-muted text-xs mb-0.5">Peak</p>
-                <p className="text-text-primary font-semibold">{peakViewers.toLocaleString()}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Broadcaster controls — disabled if too early */}
-          {isBroadcaster && (
-            isTooEarlyToStart ? (
-              <div className="bg-dark-surface border border-dark-border rounded-lg p-4 text-center">
-                <p className="text-text-secondary text-sm">
-                  🔒 Stream is locked until 10 minutes before the scheduled start time.
-                </p>
-                <p className="text-brand font-semibold text-sm mt-1">
-                  Unlocks at {new Date(new Date(stream.scheduled_start_time) - 10 * 60 * 1000).toLocaleTimeString()}
-                </p>
+            ) : stream?.scheduled_start_time && !isLive ? (
+              <div className="relative w-full aspect-video bg-[#0a0a0a] flex flex-col items-center justify-center text-center p-8">
+                {stream.thumbnail_url && (
+                  <img src={stream.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-10" />
+                )}
+                <div className="relative z-10">
+                  <div className="text-6xl mb-5 opacity-70">⏳</div>
+                  <h2 className="text-2xl font-bold text-white mb-2">Coming Soon</h2>
+                  <p className="text-brand font-semibold">
+                    {new Date(stream.scheduled_start_time).toLocaleString(undefined, {
+                      weekday: 'long', month: 'long', day: 'numeric',
+                      hour: 'numeric', minute: '2-digit'
+                    })}
+                  </p>
+                  <p className="text-text-muted text-sm mt-4 max-w-xs">
+                    The stream will begin automatically when the broadcaster goes live.
+                  </p>
+                </div>
               </div>
             ) : (
-              <StreamControls
-                isStreaming={isStreaming}
-                isMuted={isMuted}
-                isCameraOff={isCameraOff}
-                onToggleMute={toggleMute}
-                onToggleCamera={toggleCamera}
-                onStartWebcam={handleStartWebcam}
-                onStartScreen={handleStartScreen}
-                onEndStream={handleEndStream}
-              />
-            )
-          )}
+              <VideoPlayer videoRef={remoteVideoRef} connectionState={connectionState} isLive={isLive} />
+            )}
+          </div>
+
+          {/* Below-video info */}
+          <div className="px-4 lg:px-6 py-4 space-y-4 flex-1 overflow-y-auto">
+
+            {/* Error banners */}
+            {webrtcError && (
+              <div className="bg-brand/10 border border-brand/30 text-red-300 text-sm px-4 py-2.5 rounded-lg">
+                {webrtcError}
+              </div>
+            )}
+            {isBroadcaster && pageError && (
+              <div className="bg-brand/10 border border-brand/30 text-red-300 text-sm px-4 py-2.5 rounded-lg">
+                {pageError}
+              </div>
+            )}
+
+            {/* Stream title & meta */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  {isLive ? (
+                    <span className="flex items-center gap-1.5 bg-brand text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-[0_0_10px_rgba(229,9,20,0.5)]">
+                      <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
+                    </span>
+                  ) : (
+                    <span className="bg-dark-hover text-text-muted text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-widest">
+                      Offline
+                    </span>
+                  )}
+                  {stream?.category && (
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold border ${catColor}`}>
+                      {stream.category}
+                    </span>
+                  )}
+                </div>
+
+                <h1 className="text-white text-xl font-bold leading-tight">{stream?.title}</h1>
+
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="w-7 h-7 rounded-full overflow-hidden bg-brand/30 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 border border-brand/20">
+                    {stream?.avatar_url
+                      ? <img src={stream.avatar_url} alt={stream.username} className="w-full h-full object-cover" />
+                      : stream?.username?.[0]?.toUpperCase()
+                    }
+                  </div>
+                  <p className="text-text-secondary text-sm font-medium">{stream?.username}</p>
+                </div>
+
+                {stream?.description && (
+                  <p className="text-text-muted text-sm mt-2 leading-relaxed line-clamp-2">{stream.description}</p>
+                )}
+              </div>
+
+              {isLive && (
+                <div className="flex-shrink-0 text-right">
+                  <p className="text-2xl font-bold text-white">{viewerCount.toLocaleString()}</p>
+                  <p className="text-text-muted text-xs">watching</p>
+                </div>
+              )}
+            </div>
+
+            {/* Broadcaster stats */}
+            {isBroadcaster && isStreaming && (
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Duration', value: formatTime(duration), mono: true },
+                  { label: 'Viewers',  value: viewerCount.toLocaleString() },
+                  { label: 'Peak',     value: peakViewers.toLocaleString() },
+                ].map(stat => (
+                  <div key={stat.label} className="bg-dark-surface border border-dark-border rounded-xl p-3 text-center">
+                    <p className="text-text-muted text-[10px] uppercase tracking-widest mb-1">{stat.label}</p>
+                    <p className={`text-white font-bold text-lg ${stat.mono ? 'font-mono' : ''}`}>{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Broadcaster controls */}
+            {isBroadcaster && (
+              isTooEarlyToStart ? (
+                <div className="bg-dark-surface border border-dark-border rounded-xl p-5 text-center">
+                  <p className="text-text-muted text-sm">🔒 Stream is locked until 10 minutes before the scheduled start.</p>
+                  <p className="text-brand font-semibold text-sm mt-1">
+                    Unlocks at {new Date(new Date(stream.scheduled_start_time) - 10 * 60 * 1000).toLocaleTimeString()}
+                  </p>
+                </div>
+              ) : (
+                <StreamControls
+                  isStreaming={isStreaming}
+                  isMuted={isMuted}
+                  isCameraOff={isCameraOff}
+                  onToggleMute={toggleMute}
+                  onToggleCamera={toggleCamera}
+                  onStartWebcam={handleStartWebcam}
+                  onStartScreen={handleStartScreen}
+                  onEndStream={handleEndStream}
+                />
+              )
+            )}
+          </div>
         </div>
 
-        {/* Right: Chat */}
-        <div className="w-full lg:w-80 xl:w-96 flex-shrink-0">
+        {/* ── Right: Chat panel ── */}
+        <div className="w-full lg:w-[340px] xl:w-[380px] flex-shrink-0 border-l border-dark-border/40 flex flex-col h-[50vh] lg:h-auto">
           <ChatBox
             messages={messages}
             inputText={inputText}
@@ -426,6 +386,7 @@ export default function StreamPage() {
             user={user}
           />
         </div>
+
       </div>
     </div>
   );

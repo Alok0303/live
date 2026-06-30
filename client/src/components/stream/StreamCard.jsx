@@ -1,19 +1,13 @@
-// StreamCard.jsx
-// Displays a single live stream in the homepage grid.
+// StreamCard.jsx — Premium Netflix-style stream card
 
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
-
-// SQLite's CURRENT_TIMESTAMP returns "YYYY-MM-DD HH:MM:SS" (UTC, no marker).
-// JS Date parses that ambiguous format as LOCAL time, not UTC, causing a
-// timezone-sized offset in any duration math. Force it to be read as UTC.
-function parseUTCTimestamp(sqliteTimestamp) {
-  if (!sqliteTimestamp) return null;
-  return new Date(sqliteTimestamp.replace(' ', 'T') + 'Z');
+function parseUTCTimestamp(ts) {
+  if (!ts) return null;
+  return new Date(ts.replace(' ', 'T') + 'Z');
 }
 
-// Format how long a stream has been live (e.g. "2h 15m" or "45m")
 function formatDuration(startedAt) {
   const date = parseUTCTimestamp(startedAt);
   if (!date) return null;
@@ -21,116 +15,117 @@ function formatDuration(startedAt) {
   if (ms < 0) return null;
   const totalMins = Math.floor(ms / 60000);
   const hours = Math.floor(totalMins / 60);
-  const mins  = totalMins % 60;
+  const mins = totalMins % 60;
   if (hours > 0) return `${hours}h ${mins}m`;
   return `${mins}m`;
 }
 
-// Color-coded category badge
 const CATEGORY_COLORS = {
-  'Gaming':                 'bg-blue-900/60 text-blue-300',
-  'Music':                  'bg-pink-900/60 text-pink-300',
-  'Art':                    'bg-orange-900/60 text-orange-300',
-  'IRL':                    'bg-green-900/60 text-green-300',
-  'Science & Technology':   'bg-cyan-900/60 text-cyan-300',
-  'Sports':                 'bg-yellow-900/60 text-yellow-300',
-  'Cooking':                'bg-red-900/60 text-red-300',
-  'Travel':                 'bg-teal-900/60 text-teal-300',
-  'Education':              'bg-purple-900/60 text-purple-300',
-  'Just Chatting':          'bg-gray-700/60 text-gray-300',
+  'Gaming':               'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  'Music':                'bg-pink-500/20 text-pink-300 border-pink-500/30',
+  'Art':                  'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  'IRL':                  'bg-green-500/20 text-green-300 border-green-500/30',
+  'Science & Technology': 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  'Sports':               'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+  'Cooking':              'bg-red-500/20 text-red-300 border-red-500/30',
+  'Travel':               'bg-teal-500/20 text-teal-300 border-teal-500/30',
+  'Education':            'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  'Just Chatting':        'bg-zinc-500/20 text-zinc-300 border-zinc-500/30',
 };
 
 export default function StreamCard({ stream }) {
   const { user } = useAuth();
   const duration = formatDuration(stream.started_at);
   const catColor = CATEGORY_COLORS[stream.category] || CATEGORY_COLORS['Just Chatting'];
-
-  // If the logged-in user is the stream owner, add ?mode=broadcast to the URL
   const isOwnStream = user && user.id === stream.user_id;
-  const streamUrl = isOwnStream 
+  const streamUrl = isOwnStream
     ? `/stream/${stream.stream_key}?mode=broadcast`
     : `/stream/${stream.stream_key}`;
+
+  const isUpcoming = !!stream.scheduled_start_time;
 
   return (
     <Link
       to={streamUrl}
-      className="group block bg-dark-surface border border-dark-border rounded-lg overflow-hidden
-                 hover:border-brand transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-brand/10"
+      className="group block rounded-lg overflow-hidden bg-dark-surface border border-dark-border/60
+                 transition-all duration-300 hover:scale-[1.04] hover:border-brand/50
+                 hover:shadow-[0_0_0_1px_rgba(229,9,20,0.3),0_20px_60px_rgba(0,0,0,0.9)]
+                 hover:z-10 relative cursor-pointer"
     >
-      {/* Thumbnail area */}
-      <div className="relative aspect-video bg-dark-base flex items-center justify-center overflow-hidden">
+      {/* ── Thumbnail ───────────────────────────────────────── */}
+      <div className="relative aspect-video overflow-hidden bg-[#0d0d0d]">
         {stream.thumbnail_url ? (
           <img
             src={stream.thumbnail_url}
             alt={stream.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:brightness-75"
           />
         ) : (
-          /* Gradient placeholder when no thumbnail */
-          <div className="absolute inset-0 bg-gradient-to-br from-brand/20 via-dark-base to-dark-hover flex flex-col items-center justify-center gap-2 text-text-muted">
-            <span className="text-4xl group-hover:scale-110 transition-transform duration-200">
-              {stream.scheduled_start_time ? '📅' : '🎥'}
-            </span>
-            <span className="text-xs font-medium tracking-wide uppercase opacity-60">
-              {stream.scheduled_start_time ? 'Upcoming' : 'Live'}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0d0d0d] via-[#1a1a1a] to-[#111] flex flex-col items-center justify-center gap-2">
+            <span className="text-4xl opacity-40 transition-transform duration-300 group-hover:scale-110 group-hover:opacity-60">
+              {isUpcoming ? '📅' : '🎥'}
             </span>
           </div>
         )}
 
-        {/* Top-left Badges (Live/Upcoming & Duration/Date) */}
-        <div className="absolute top-2 left-2 flex flex-col gap-1.5 items-start">
-          {stream.scheduled_start_time ? (
-            <span className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">
+        {/* Dark gradient on hover to show info */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+        {/* ── Top-left badge ── */}
+        <div className="absolute top-2 left-2 flex items-center gap-2">
+          {isUpcoming ? (
+            <span className="flex items-center gap-1 bg-black/80 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-widest">
               📅 Upcoming
             </span>
           ) : (
-            <span className="live-badge flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse inline-block" />
+            <span className="flex items-center gap-1.5 bg-brand text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest shadow-[0_0_8px_rgba(229,9,20,0.6)]">
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
               Live
             </span>
           )}
-          
-          {stream.scheduled_start_time ? (
-            <span className="bg-black/70 text-white text-xs px-1.5 py-0.5 rounded font-mono">
-              {new Date(stream.scheduled_start_time).toLocaleString(undefined, {
-                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
-              })}
-            </span>
-          ) : duration ? (
-            <span className="bg-black/70 text-white text-xs px-1.5 py-0.5 rounded font-mono">
-              {duration}
-            </span>
-          ) : null}
         </div>
 
-        {/* Viewer count — bottom left (only if live) */}
-        {!stream.scheduled_start_time && (
-          <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
-            <span>👁</span>
-            <span className="font-medium">{stream.viewer_count?.toLocaleString() ?? 0}</span>
+        {/* ── Top-right: duration or scheduled date ── */}
+        {(duration || isUpcoming) && (
+          <div className="absolute top-2 right-2">
+            <span className="bg-black/70 backdrop-blur-sm text-white text-[10px] font-mono px-1.5 py-0.5 rounded border border-white/10">
+              {isUpcoming
+                ? new Date(stream.scheduled_start_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                : duration
+              }
+            </span>
+          </div>
+        )}
+
+        {/* ── Bottom: viewers (appear on hover) ── */}
+        {!isUpcoming && (
+          <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/80 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <span className="text-brand">●</span>
+            {stream.viewer_count?.toLocaleString() ?? 0} watching
           </div>
         )}
       </div>
 
-      {/* Stream info */}
-      <div className="p-3 flex gap-3">
-        {/* Streamer avatar */}
-        <div className="w-8 h-8 rounded-full bg-brand flex-shrink-0 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
+      {/* ── Info bar ────────────────────────────────────────── */}
+      <div className="px-3 py-2.5 flex gap-2.5 bg-dark-surface group-hover:bg-dark-hover transition-colors duration-300">
+        {/* Avatar */}
+        <div className="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden bg-dark-border border border-brand/20 flex items-center justify-center text-xs font-bold text-white mt-0.5">
           {stream.avatar_url
             ? <img src={stream.avatar_url} alt={stream.username} className="w-full h-full object-cover" />
-            : stream.username[0].toUpperCase()
+            : stream.username?.[0]?.toUpperCase()
           }
         </div>
 
         <div className="min-w-0 flex-1">
-          {/* Stream title — truncate if long */}
-          <p className="text-text-primary text-sm font-medium truncate group-hover:text-brand transition-colors">
+          {/* Title */}
+          <p className="text-text-primary text-sm font-semibold leading-tight truncate group-hover:text-white transition-colors">
             {stream.title}
           </p>
-          <p className="text-text-secondary text-xs mt-0.5">{stream.username}</p>
-          {/* Category tag */}
+          {/* Username */}
+          <p className="text-text-muted text-xs mt-0.5 truncate">{stream.username}</p>
+          {/* Category pill */}
           {stream.category && (
-            <span className={`inline-block mt-1.5 text-xs px-1.5 py-0.5 rounded font-medium ${catColor}`}>
+            <span className={`inline-block mt-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold border ${catColor}`}>
               {stream.category}
             </span>
           )}

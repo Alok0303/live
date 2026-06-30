@@ -16,6 +16,10 @@ export default defineConfig({
         target: 'http://localhost:5000',
         ws: true, // WebSocket proxy for Socket.IO
       },
+      '/uploads': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
     },
   },
 });

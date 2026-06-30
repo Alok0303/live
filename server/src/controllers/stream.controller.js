@@ -6,14 +6,29 @@ const logger = require('../utils/logger');
 
 const streamController = {
 
+  // POST /api/streams/upload-thumbnail
+  uploadThumbnail(req, res, next) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      // Assuming frontend and backend are on same host or handled by proxy,
+      // return a relative URL like /uploads/filename.ext
+      const url = `/uploads/${req.file.filename}`;
+      res.json({ url });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   // POST /api/streams  — create a new stream
   createStream(req, res, next) {
     try {
-      const { title, description, category, isPaid, price, scheduledStartTime } = req.body;
+      const { title, description, category, isPaid, price, scheduledStartTime, thumbnailUrl } = req.body;
       const userId = req.user.id;
 
       const stream = streamService.createStream({ 
-        userId, title, description, category, isPaid, price, scheduledStartTime 
+        userId, title, description, category, isPaid, price, scheduledStartTime, thumbnailUrl
       });
 
       logger.info(`Stream created: ${stream.stream_key} by ${req.user.username}`);

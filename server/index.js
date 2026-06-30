@@ -29,12 +29,22 @@ if (cleanedUp.changes > 0) {
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
 
+const fs = require('fs');
+const path = require('path');
+
+// Ensure uploads dir exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
 app.use(cors({
   origin: config.cors.clientUrl,
   credentials: true,
 }));
 
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 if (config.server.isDevelopment) {
   app.use((req, _res, next) => {
