@@ -3,6 +3,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
+import { BroadcastProvider } from './context/BroadcastContext';
 import Navbar from './components/common/Navbar';
 import ProtectedRoute from './components/common/ProtectedRoute';
 
@@ -20,36 +21,38 @@ export default function App() {
     // AuthProvider must wrap SocketProvider (socket needs auth state)
     <AuthProvider>
       <SocketProvider>
-        <BrowserRouter>
-          <div className="min-h-screen bg-dark-base">
-            <Navbar />
-            <main>
-              <Routes>
-                {/* Public routes */}
-                <Route path="/"              element={<HomePage />} />
-                <Route path="/login"         element={<LoginPage />} />
-                <Route path="/register"      element={<RegisterPage />} />
-                <Route path="/stream/:streamKey" element={<StreamPage />} />
-                <Route path="/profile/:username" element={<ProfilePage />} />
+        <BroadcastProvider>
+          <BrowserRouter>
+            <div className="min-h-screen bg-dark-base">
+              <Navbar />
+              <main>
+                <Routes>
+                  {/* Public routes */}
+                  <Route path="/"              element={<HomePage />} />
+                  <Route path="/login"         element={<LoginPage />} />
+                  <Route path="/register"      element={<RegisterPage />} />
+                  <Route path="/stream/:streamKey" element={<StreamPage />} />
+                  <Route path="/profile/:username" element={<ProfilePage />} />
 
-                {/* Protected routes — require login */}
-                <Route path="/go-live" element={
-                  <ProtectedRoute><GoLivePage /></ProtectedRoute>
-                } />
-                <Route path="/settings" element={
-                  <ProtectedRoute><SettingsPage /></ProtectedRoute>
-                } />
+                  {/* Protected routes — require login */}
+                  <Route path="/go-live" element={
+                    <ProtectedRoute><GoLivePage /></ProtectedRoute>
+                  } />
+                  <Route path="/settings" element={
+                    <ProtectedRoute><SettingsPage /></ProtectedRoute>
+                  } />
 
-                {/* 404 */}
-                <Route path="*" element={
-                  <div className="flex items-center justify-center min-h-[60vh] text-text-secondary">
-                    Page not found
-                  </div>
-                } />
-              </Routes>
-            </main>
-          </div>
-        </BrowserRouter>
+                  {/* 404 */}
+                  <Route path="*" element={
+                    <div className="flex items-center justify-center min-h-[60vh] text-text-secondary">
+                      Page not found
+                    </div>
+                  } />
+                </Routes>
+              </main>
+            </div>
+          </BrowserRouter>
+        </BroadcastProvider>
       </SocketProvider>
     </AuthProvider>
   );

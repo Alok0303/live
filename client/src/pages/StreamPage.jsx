@@ -8,6 +8,7 @@ import apiClient from '../api/apiClient';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { useWebRTC } from '../hooks/useWebRTC';
+import { useBroadcast } from '../context/BroadcastContext';
 import VideoPlayer from '../components/stream/VideoPlayer';
 import StreamControls from '../components/stream/StreamControls';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -40,7 +41,6 @@ const CATEGORY_COLORS = {
 export default function StreamPage() {
   const { streamKey } = useParams();
   const [searchParams] = useSearchParams();
-  const isBroadcaster = searchParams.get('mode') === 'broadcast';
 
   const socket   = useSocket();
   const { user } = useAuth();
@@ -53,15 +53,20 @@ export default function StreamPage() {
   const [streamEnded, setStreamEnded] = useState(false);
   const [isLive, setIsLive]           = useState(false);
   const [pageError, setPageError]     = useState('');
-
+  const isBroadcaster = searchParams.get('mode') === 'broadcast' || 
+                        (user && stream && user.id === stream.user_id);
   // Broadcaster duration timer
   const [duration, setDuration] = useState(0);
   const durationRef = useRef(null);
 
+  // Broadcaster media/peer state lives in the global BroadcastContext so it
+  // survives navigation. Viewers keep a local, page-scoped connection.
+  const broadcastCtx = useBroadcast();
+  const viewerWebRTC = useWebRTC({ socket, streamKey, isBroadcaster: false });
+
   const {
     localVideoRef,
     remoteVideoRef,
-    startLocalStream,
     stopStream,
     toggleMute,
     toggleCamera,
@@ -70,7 +75,17 @@ export default function StreamPage() {
     isCameraOff,
     connectionState,
     error: webrtcError,
-  } = useWebRTC({ socket, streamKey, isBroadcaster });
+  } = isBroadcaster ? broadcastCtx : viewerWebRTC;
+
+  // Re-attach the local preview <video> element whenever this page (re)mounts
+  // while already broadcasting (e.g. you navigated away and came back).
+  useEffect(() => {
+    if (isBroadcaster && localVideoRef.current && broadcastCtx.localStreamRef?.current) {
+      localVideoRef.current.srcObject = broadcastCtx.localStreamRef.current;
+    }
+  }, [isBroadcaster, localVideoRef, broadcastCtx.localStreamRef]);
+
+
   const { messages, inputText, setInputText, sendMessage, handleKeyDown, error: chatError, bottomRef } = useChat({ socket, streamKey, user });
 
   // ─── Load stream info ───────────────────────────────────────────────────
@@ -90,7 +105,7 @@ export default function StreamPage() {
   // ─── Join socket room ───────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!socket || !stream) return;
+    if (!socket || !stream || !user) return;
 
     const joinRoom = () => {
       console.log('Joining room:', streamKey, 'broadcaster:', isBroadcaster);
@@ -99,9 +114,8 @@ export default function StreamPage() {
 
     if (socket.connected) {
       joinRoom();
-    } else {
-      socket.once('connect', joinRoom);
     }
+    socket.on('connect', joinRoom);
 
     socket.on('viewer:count', ({ count }) => {
       setViewerCount(count);
@@ -122,7 +136,7 @@ export default function StreamPage() {
     };
   // ← stopStream removed from deps — it's now stable (empty useCallback)
   // ← this effect will only ever run once per socket/stream change
-  }, [socket, stream, streamKey, isBroadcaster]); // eslint-disable-line
+  }, [socket, stream, streamKey, isBroadcaster, user]);
 
   // ─── Broadcaster duration timer ─────────────────────────────────────────
 
@@ -144,32 +158,38 @@ export default function StreamPage() {
 
   const handleStartWebcam = async () => {
     try {
-      await startLocalStream(false);
-      // Mark stream as live in DB
+      await broadcastCtx.startBroadcast(streamKey, false);
       await apiClient.patch(`/streams/${streamKey}/live`);
-      // Notify viewers via socket
       socket.emit('stream:go-live', { streamKey });
       setIsLive(true);
-    } catch (_) {
-      // Error already set in useWebRTC
+    } catch (err) {
+      // Surface the failure instead of swallowing it — if going live in the
+      // DB fails, the broadcaster needs to know, or no one will ever see them.
+      setPageError(err.response?.data?.error || 'Failed to go live. Please try again.');
+      broadcastCtx.endBroadcast();
     }
   };
 
   const handleStartScreen = async () => {
     try {
-      await startLocalStream(true);
+      await broadcastCtx.startBroadcast(streamKey, true);
       await apiClient.patch(`/streams/${streamKey}/live`);
       socket.emit('stream:go-live', { streamKey });
       setIsLive(true);
-    } catch (_) {}
+    } catch (err) {
+      setPageError(err.response?.data?.error || 'Failed to go live. Please try again.');
+      broadcastCtx.endBroadcast();
+    }
   };
 
   const handleEndStream = async () => {
-    stopStream();
+    broadcastCtx.endBroadcast();
     socket.emit('stream:end', { streamKey });
     await apiClient.patch(`/streams/${streamKey}/end`).catch(() => {});
     navigate('/');
   };
+
+  
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -248,6 +268,13 @@ export default function StreamPage() {
           {webrtcError && (
             <div className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-3 py-2 rounded-md">
               {webrtcError}
+            </div>
+          )}
+
+          {/* Go-live failure (e.g. DB update failed even though camera started) */}
+          {isBroadcaster && pageError && (
+            <div className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-3 py-2 rounded-md">
+              {pageError}
             </div>
           )}
 

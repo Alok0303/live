@@ -74,8 +74,7 @@ function setupSocket(io) {
         // mount and register the webrtc:offer socket listener
         setTimeout(() => {
           // Verify viewer is still connected before sending
-          const viewerSocket = io.sockets.sockets.get(socket.id);
-          if (viewerSocket) {
+          if (socket.connected) {
             io.to(broadcasterSocketId).emit('viewer:joined', {
               viewerSocketId: socket.id,
             });
@@ -104,6 +103,24 @@ function setupSocket(io) {
         // Register this socket as the broadcaster for this stream
         broadcasters.set(streamKey, socket.id);
         logger.info(`Broadcaster registered for stream: ${streamKey}`);
+
+        // Catch up on any viewers who already joined this room BEFORE the
+        // broadcaster (re-)registered (e.g. broadcaster navigated away and
+        // back). Without this, those viewers are never told to expect an
+        // offer and get stuck forever on "waiting for stream to start".
+        const existingViewers = roomViewers.get(streamKey);
+        if (existingViewers && existingViewers.size > 0) {
+          logger.info(`Notifying broadcaster of ${existingViewers.size} pre-existing viewer(s)`);
+          existingViewers.forEach(viewerSocketId => {
+            const viewerSocket = io.sockets.sockets.get(viewerSocketId);
+            if (viewerSocket) {
+              io.to(socket.id).emit('viewer:joined', { viewerSocketId });
+              // Also let that viewer know the stream is live, in case they
+              // joined before any 'stream:started' broadcast went out.
+              io.to(viewerSocketId).emit('stream:started', { streamKey });
+            }
+          });
+        }
       } else {
         handleViewerReady(streamKey);
       }
@@ -178,7 +195,15 @@ function setupSocket(io) {
       // Check if this was a broadcaster
       for (const [streamKey, broadcasterSocketId] of broadcasters.entries()) {
         if (broadcasterSocketId === socket.id) {
-          // Broadcaster left — notify viewers and clean up
+          // Broadcaster left — persist the end in the DB, notify viewers, and clean up
+          try {
+            const stream = streamService.getStreamByKey(streamKey);
+            if (stream && stream.is_live) {
+              streamService.endStream(streamKey, stream.user_id);
+            }
+          } catch (err) {
+            logger.error(`Failed to end stream ${streamKey} on disconnect: ${err.message}`);
+          }
           io.to(streamKey).emit('stream:ended', { streamKey });
           io.to(LOBBY_ROOM).emit('stream:went_offline', { streamKey });
           broadcasters.delete(streamKey);

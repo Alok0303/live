@@ -3,10 +3,12 @@
 
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useBroadcast } from '../../context/BroadcastContext';
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const { isStreaming, activeStreamKey } = useBroadcast();
 
   const handleLogout = () => {
     logout();
@@ -29,14 +31,25 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {isAuthenticated ? (
             <>
-              {/* Go Live button */}
-              <Link
-                to="/go-live"
-                className="btn-primary text-sm py-1.5 px-3 flex items-center gap-1.5"
-              >
-                <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                Go Live
-              </Link>
+              {/* Go Live button — disabled while already broadcasting */}
+              {isStreaming ? (
+                <Link
+                  to={`/stream/${activeStreamKey}?mode=broadcast`}
+                  className="btn-primary text-sm py-1.5 px-3 flex items-center gap-1.5 opacity-70 cursor-default"
+                  title="You're already live"
+                >
+                  <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                  You're Live
+                </Link>
+              ) : (
+                <Link
+                  to="/go-live"
+                  className="btn-primary text-sm py-1.5 px-3 flex items-center gap-1.5"
+                >
+                  <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                  Go Live
+                </Link>
+              )}
 
               {/* User menu */}
               <div className="flex items-center gap-2">

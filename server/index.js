@@ -10,9 +10,22 @@ const logger = require('./src/utils/logger');
 const errorHandler = require('./src/middleware/errorHandler');
 
 // Initialize database (creates tables if first run)
-require('./src/db/database');
+const db = require('./src/db/database');
 
 const app = express();
+
+// ─── Startup cleanup ────────────────────────────────────────────────────────
+// The in-memory "broadcasters" map in socketManager.js resets to empty on
+// every server restart, but any streams left as is_live=1 in the DB from
+// before the restart have no real broadcaster anymore — they're zombies that
+// show up as live cards forever and can never actually connect. Clear them
+// out every time the server boots.
+const cleanedUp = db.prepare(
+  `UPDATE streams SET is_live = 0, ended_at = CURRENT_TIMESTAMP WHERE is_live = 1`
+).run();
+if (cleanedUp.changes > 0) {
+  logger.info(`Startup cleanup: ended ${cleanedUp.changes} stale live stream(s) from a previous run`);
+}
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
 

@@ -60,7 +60,10 @@ const streamService = {
         `SELECT s.*, u.username, u.avatar_url
          FROM streams s
          JOIN users u ON s.user_id = u.id
-         WHERE s.is_live = 1 AND s.category = ?
+         WHERE s.is_live = 1 
+           AND s.category = ?
+           AND s.started_at IS NOT NULL
+           AND datetime(s.started_at) > datetime('now', '-24 hours')
          ORDER BY s.viewer_count DESC, s.started_at DESC`
       ).all(category);
     }
@@ -69,6 +72,8 @@ const streamService = {
        FROM streams s
        JOIN users u ON s.user_id = u.id
        WHERE s.is_live = 1
+         AND s.started_at IS NOT NULL
+         AND datetime(s.started_at) > datetime('now', '-24 hours')
        ORDER BY s.viewer_count DESC, s.started_at DESC`
     ).all();
   },

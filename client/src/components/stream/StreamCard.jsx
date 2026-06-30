@@ -2,11 +2,22 @@
 // Displays a single live stream in the homepage grid.
 
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+
+
+// SQLite's CURRENT_TIMESTAMP returns "YYYY-MM-DD HH:MM:SS" (UTC, no marker).
+// JS Date parses that ambiguous format as LOCAL time, not UTC, causing a
+// timezone-sized offset in any duration math. Force it to be read as UTC.
+function parseUTCTimestamp(sqliteTimestamp) {
+  if (!sqliteTimestamp) return null;
+  return new Date(sqliteTimestamp.replace(' ', 'T') + 'Z');
+}
 
 // Format how long a stream has been live (e.g. "2h 15m" or "45m")
 function formatDuration(startedAt) {
-  if (!startedAt) return null;
-  const ms = Date.now() - new Date(startedAt).getTime();
+  const date = parseUTCTimestamp(startedAt);
+  if (!date) return null;
+  const ms = Date.now() - date.getTime();
   if (ms < 0) return null;
   const totalMins = Math.floor(ms / 60000);
   const hours = Math.floor(totalMins / 60);
@@ -30,12 +41,19 @@ const CATEGORY_COLORS = {
 };
 
 export default function StreamCard({ stream }) {
+  const { user } = useAuth();
   const duration = formatDuration(stream.started_at);
   const catColor = CATEGORY_COLORS[stream.category] || CATEGORY_COLORS['Just Chatting'];
 
+  // If the logged-in user is the stream owner, add ?mode=broadcast to the URL
+  const isOwnStream = user && user.id === stream.user_id;
+  const streamUrl = isOwnStream 
+    ? `/stream/${stream.stream_key}?mode=broadcast`
+    : `/stream/${stream.stream_key}`;
+
   return (
     <Link
-      to={`/stream/${stream.stream_key}`}
+      to={streamUrl}
       className="group block bg-dark-surface border border-dark-border rounded-lg overflow-hidden
                  hover:border-brand transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-brand/10"
     >

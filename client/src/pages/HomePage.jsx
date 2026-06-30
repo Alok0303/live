@@ -8,6 +8,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { useBroadcast } from '../context/BroadcastContext';
 
 const SORT_OPTIONS = [
   { label: 'Most Viewers', value: 'viewers' },
@@ -23,6 +24,7 @@ export default function HomePage() {
 
   const { isAuthenticated } = useAuth();
   const socket = useSocket();
+  const { isStreaming, activeStreamKey } = useBroadcast();
 
   // Fetch helper — can filter by category
   const fetchStreams = useCallback((cat = activeCategory) => {
@@ -118,10 +120,21 @@ export default function HomePage() {
           )}
 
           {isAuthenticated && (
-            <Link to="/go-live" className="btn-primary text-sm flex items-center gap-1.5">
-              <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-              Go Live
-            </Link>
+            isStreaming ? (
+              <Link
+                to={`/stream/${activeStreamKey}?mode=broadcast`}
+                className="btn-primary text-sm flex items-center gap-1.5 opacity-70 cursor-default"
+                title="You're already live"
+              >
+                <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                You're Live
+              </Link>
+            ) : (
+              <Link to="/go-live" className="btn-primary text-sm flex items-center gap-1.5">
+                <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                Go Live
+              </Link>
+            )
           )}
         </div>
       </div>

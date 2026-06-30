@@ -47,6 +47,12 @@ export default function GoLivePage() {
       // Navigate to the streamer view with this stream key
       navigate(`/stream/${stream_key}?mode=broadcast`);
     } catch (err) {
+      if (err.response?.status === 409 && err.response?.data?.existingStream) {
+        // User already has a live stream (e.g. from a stale/forgotten session) —
+        // resume it instead of just showing an error.
+        navigate(`/stream/${err.response.data.existingStream.stream_key}?mode=broadcast`);
+        return;
+      }
       setError(err.response?.data?.error || 'Failed to create stream');
       setLoading(false);
     }

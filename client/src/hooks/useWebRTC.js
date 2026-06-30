@@ -36,10 +36,23 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
       return;
     }
 
-    // Avoid duplicate peer connections for the same viewer
-    if (peerConnections.current.has(viewerSocketId)) {
-      console.warn('Already have PC for viewer:', viewerSocketId);
-      return;
+    // We may get a duplicate "viewer joined" notification for the same
+    // viewerSocketId — either a genuinely stale reconnect (viewer left and
+    // came back) or just a harmless duplicate event (e.g. React StrictMode
+    // double-invoking effects in dev). Only replace the connection if the
+    // existing one is actually dead/dying — otherwise leave an
+    // in-progress handshake alone, or we'll desync from the viewer (who
+    // only acts on the FIRST offer it receives and ignores the rest).
+    const existingPc = peerConnections.current.get(viewerSocketId);
+    if (existingPc) {
+      const deadStates = ['failed', 'disconnected', 'closed'];
+      if (!deadStates.includes(existingPc.connectionState)) {
+        console.log('Ignoring duplicate join for viewer (connection still active):', viewerSocketId, existingPc.connectionState);
+        return;
+      }
+      console.warn('Replacing stale PC for viewer:', viewerSocketId, existingPc.connectionState);
+      existingPc.close();
+      peerConnections.current.delete(viewerSocketId);
     }
 
     console.log('Creating offer for viewer:', viewerSocketId);
@@ -134,8 +147,15 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
 
     pc.ontrack = (event) => {
       console.log('Got remote track:', event.track.kind);
-      if (event.streams?.[0] && remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0];
+      if (remoteVideoRef.current) {
+        let stream = remoteVideoRef.current.srcObject;
+        if (!stream || !(stream instanceof MediaStream)) {
+          stream = event.streams?.[0] || new MediaStream();
+          remoteVideoRef.current.srcObject = stream;
+        }
+        if (!stream.getTracks().includes(event.track)) {
+          stream.addTrack(event.track);
+        }
         setConnectionState('connected');
         console.log('✅ Remote stream attached');
       }
@@ -170,6 +190,19 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
 
     sock.emit('webrtc:answer', { answer, broadcasterSocketId });
     console.log('Answer sent to broadcaster');
+
+    // Drain queued candidates that arrived before setRemoteDescription
+    if (pc.pendingCandidates) {
+      console.log(`Draining ${pc.pendingCandidates.length} pending candidate(s) for broadcaster`);
+      for (const cand of pc.pendingCandidates) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        } catch (err) {
+          console.warn('Failed to add queued candidate:', err);
+        }
+      }
+      pc.pendingCandidates = [];
+    }
   };
 
   // ─── Socket listeners — registered ONCE when socket is ready ──────────
@@ -185,7 +218,20 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
       socket.on('webrtc:answer', async ({ answer, viewerSocketId }) => {
         console.log('Got answer from viewer:', viewerSocketId);
         const pc = peerConnections.current.get(viewerSocketId);
-        if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        if (pc) {
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            if (pc.pendingCandidates) {
+              console.log(`Draining ${pc.pendingCandidates.length} pending candidate(s) for viewer:`, viewerSocketId);
+              for (const cand of pc.pendingCandidates) {
+                await pc.addIceCandidate(new RTCIceCandidate(cand));
+              }
+              pc.pendingCandidates = [];
+            }
+          } catch (err) {
+            console.error('Error setting remote description or draining candidates:', err);
+          }
+        }
       });
 
     } else {
@@ -198,7 +244,12 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
       const pc = peerConnections.current.get(fromSocketId);
       if (pc && candidate) {
         try {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } else {
+            pc.pendingCandidates = pc.pendingCandidates || [];
+            pc.pendingCandidates.push(candidate);
+          }
         } catch (_) {}
       }
     });
@@ -243,5 +294,6 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
     toggleMute, toggleCamera,
     isStreaming, isMuted, isCameraOff,
     connectionState, error,
+    localStreamRef: localStream, // exposed so consumers can re-attach video after remount
   };
 }
