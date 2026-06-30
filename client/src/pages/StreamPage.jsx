@@ -109,7 +109,7 @@ export default function StreamPage() {
 
     const joinRoom = () => {
       console.log('Joining room:', streamKey, 'broadcaster:', isBroadcaster);
-      socket.emit('stream:join', { streamKey, isBroadcaster });
+      socket.emit('stream:join', { streamKey, isBroadcaster, userId: user?.id });
     };
 
     if (socket.connected) {
@@ -127,16 +127,35 @@ export default function StreamPage() {
       setIsLive(false);
       stopStream();
     });
+    socket.on('stream:broadcast-rejected', ({ reason }) => {
+      setPageError(reason || 'This stream is already being broadcast elsewhere.');
+      navigate('/');
+    });
 
     return () => {
       socket.off('connect', joinRoom);
       socket.off('viewer:count');
       socket.off('stream:started');
       socket.off('stream:ended');
+      socket.off('stream:broadcast-rejected');
     };
   // ← stopStream removed from deps — it's now stable (empty useCallback)
   // ← this effect will only ever run once per socket/stream change
   }, [socket, stream, streamKey, isBroadcaster, user]);
+
+  // ─── Viewer: leave cleanly on unmount/navigation ────────────────────────
+  // The socket is app-level and survives route changes, so we have to tell
+  // the server explicitly when a viewer navigates away — otherwise the
+  // server (and the broadcaster's stale peer connection) never finds out,
+  // and re-entering the stream later can get stuck.
+  useEffect(() => {
+    if (!socket || isBroadcaster) return;
+    return () => {
+      socket.emit('stream:leave', { streamKey });
+      viewerWebRTC.stopStream();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, streamKey, isBroadcaster]);
 
   // ─── Broadcaster duration timer ─────────────────────────────────────────
 
@@ -210,6 +229,12 @@ export default function StreamPage() {
 
   const catColor = CATEGORY_COLORS[stream?.category] || CATEGORY_COLORS['Just Chatting'];
 
+  // Compute whether broadcaster is too early to start
+  const minutesUntilScheduled = stream?.scheduled_start_time
+    ? (new Date(stream.scheduled_start_time) - Date.now()) / 60000
+    : null;
+  const isTooEarlyToStart = minutesUntilScheduled !== null && minutesUntilScheduled > 10;
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-4">
       {/* Stream ended banner */}
@@ -239,9 +264,32 @@ export default function StreamPage() {
               />
               {!isStreaming && (
                 <div className="absolute inset-0 flex items-center justify-center bg-dark-base">
-                  <div className="text-center text-text-muted">
-                    <div className="text-5xl mb-3">🎥</div>
-                    <p className="text-sm">Choose a source below to start</p>
+                  <div className="text-center text-text-muted flex flex-col items-center px-4">
+                    {isTooEarlyToStart ? (
+                      <>
+                        <div className="text-5xl mb-3">🔒</div>
+                        <p className="text-brand font-bold text-lg">Too early to go live</p>
+                        <p className="text-sm mt-2">
+                          Your stream is scheduled for <br />
+                          <span className="text-white font-semibold">
+                            {new Date(stream.scheduled_start_time).toLocaleString()}
+                          </span>
+                        </p>
+                        <p className="text-xs text-text-muted mt-2">
+                          You can go live within 10 minutes of the scheduled time.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-5xl mb-3">🎥</div>
+                        {stream?.scheduled_start_time && (
+                          <p className="text-sm font-semibold text-brand mb-1">
+                            Scheduled for {new Date(stream.scheduled_start_time).toLocaleString()}
+                          </p>
+                        )}
+                        <p className="text-sm mt-1">Choose a source below to start</p>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -254,6 +302,18 @@ export default function StreamPage() {
                   </span>
                 </div>
               )}
+            </div>
+          ) : stream?.scheduled_start_time && !isLive ? (
+            /* Viewer sees countdown / waiting room */
+            <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden flex flex-col items-center justify-center text-center p-6">
+              <div className="text-6xl mb-4">⏳</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Upcoming Stream</h2>
+              <p className="text-brand font-semibold text-lg mb-1">
+                Starts at {new Date(stream.scheduled_start_time).toLocaleString()}
+              </p>
+              <p className="text-text-muted text-sm mt-4">
+                The stream will begin automatically when the broadcaster goes live. Hang tight!
+              </p>
             </div>
           ) : (
             /* Viewer sees incoming remote stream */
@@ -327,18 +387,29 @@ export default function StreamPage() {
             </div>
           )}
 
-          {/* Broadcaster controls */}
+          {/* Broadcaster controls — disabled if too early */}
           {isBroadcaster && (
-            <StreamControls
-              isStreaming={isStreaming}
-              isMuted={isMuted}
-              isCameraOff={isCameraOff}
-              onToggleMute={toggleMute}
-              onToggleCamera={toggleCamera}
-              onStartWebcam={handleStartWebcam}
-              onStartScreen={handleStartScreen}
-              onEndStream={handleEndStream}
-            />
+            isTooEarlyToStart ? (
+              <div className="bg-dark-surface border border-dark-border rounded-lg p-4 text-center">
+                <p className="text-text-secondary text-sm">
+                  🔒 Stream is locked until 10 minutes before the scheduled start time.
+                </p>
+                <p className="text-brand font-semibold text-sm mt-1">
+                  Unlocks at {new Date(new Date(stream.scheduled_start_time) - 10 * 60 * 1000).toLocaleTimeString()}
+                </p>
+              </div>
+            ) : (
+              <StreamControls
+                isStreaming={isStreaming}
+                isMuted={isMuted}
+                isCameraOff={isCameraOff}
+                onToggleMute={toggleMute}
+                onToggleCamera={toggleCamera}
+                onStartWebcam={handleStartWebcam}
+                onStartScreen={handleStartScreen}
+                onEndStream={handleEndStream}
+              />
+            )
           )}
         </div>
 

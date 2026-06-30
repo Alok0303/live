@@ -209,38 +209,43 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
   useEffect(() => {
     if (!socket) return;
 
-    if (isBroadcaster) {
-      socket.on('viewer:joined', ({ viewerSocketId }) => {
-        console.log('viewer:joined received:', viewerSocketId);
-        createOfferForViewer(viewerSocketId);
-      });
+    const handleViewerJoined = ({ viewerSocketId }) => {
+      console.log('viewer:joined received:', viewerSocketId);
+      createOfferForViewer(viewerSocketId);
+    };
 
-      socket.on('webrtc:answer', async ({ answer, viewerSocketId }) => {
-        console.log('Got answer from viewer:', viewerSocketId);
-        const pc = peerConnections.current.get(viewerSocketId);
-        if (pc) {
-          try {
-            await pc.setRemoteDescription(new RTCSessionDescription(answer));
-            if (pc.pendingCandidates) {
-              console.log(`Draining ${pc.pendingCandidates.length} pending candidate(s) for viewer:`, viewerSocketId);
-              for (const cand of pc.pendingCandidates) {
-                await pc.addIceCandidate(new RTCIceCandidate(cand));
-              }
-              pc.pendingCandidates = [];
+    const handleViewerLeft = ({ viewerSocketId }) => {
+      const pc = peerConnections.current.get(viewerSocketId);
+      if (pc) {
+        console.log('Viewer left — closing stale PC:', viewerSocketId);
+        pc.close();
+        peerConnections.current.delete(viewerSocketId);
+      }
+      pendingViewers.current = pendingViewers.current.filter(id => id !== viewerSocketId);
+    };
+
+    const handleAnswer = async ({ answer, viewerSocketId }) => {
+      console.log('Got answer from viewer:', viewerSocketId);
+      const pc = peerConnections.current.get(viewerSocketId);
+      if (pc) {
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          if (pc.pendingCandidates) {
+            console.log(`Draining ${pc.pendingCandidates.length} pending candidate(s) for viewer:`, viewerSocketId);
+            for (const cand of pc.pendingCandidates) {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
             }
-          } catch (err) {
-            console.error('Error setting remote description or draining candidates:', err);
+            pc.pendingCandidates = [];
           }
+        } catch (err) {
+          console.error('Error setting remote description or draining candidates:', err);
         }
-      });
+      }
+    };
 
-    } else {
-      // Stable wrapper — points to latest handleOfferRef.current
-      // This listener is registered once and never torn down
-      socket.on('webrtc:offer', (data) => handleOfferRef.current(data));
-    }
+    const handleOffer = (data) => handleOfferRef.current(data);
 
-    socket.on('webrtc:ice-candidate', async ({ candidate, fromSocketId }) => {
+    const handleIceCandidate = async ({ candidate, fromSocketId }) => {
       const pc = peerConnections.current.get(fromSocketId);
       if (pc && candidate) {
         try {
@@ -252,15 +257,29 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
           }
         } catch (_) {}
       }
-    });
+    };
+
+    if (isBroadcaster) {
+      socket.on('viewer:joined', handleViewerJoined);
+      socket.on('viewer:left', handleViewerLeft);
+      socket.on('webrtc:answer', handleAnswer);
+    } else {
+      socket.on('webrtc:offer', handleOffer);
+    }
+
+    socket.on('webrtc:ice-candidate', handleIceCandidate);
 
     return () => {
-      socket.off('viewer:joined');
-      socket.off('webrtc:offer');
-      socket.off('webrtc:answer');
-      socket.off('webrtc:ice-candidate');
+      if (isBroadcaster) {
+        socket.off('viewer:joined', handleViewerJoined);
+        socket.off('viewer:left', handleViewerLeft);
+        socket.off('webrtc:answer', handleAnswer);
+      } else {
+        socket.off('webrtc:offer', handleOffer);
+      }
+      socket.off('webrtc:ice-candidate', handleIceCandidate);
     };
-  }, [socket, isBroadcaster]); // ← NO stopStream, NO createOfferForViewer here
+  }, [socket, isBroadcaster, createOfferForViewer]); // ← NO stopStream here
 
   // ─── Controls ──────────────────────────────────────────────────────────
   const toggleMute = useCallback(() => {

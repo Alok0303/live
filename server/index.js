@@ -52,6 +52,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth',    require('./src/routes/auth.routes'));
 app.use('/api/users',   require('./src/routes/user.routes'));
 app.use('/api/streams', require('./src/routes/stream.routes'));
+app.use('/api/payments', require('./src/routes/payment.routes'));
 
 // ─── Error Handling ───────────────────────────────────────────────────────────
 

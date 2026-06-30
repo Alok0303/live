@@ -20,7 +20,7 @@ const userController = {
 
     // Also get their stream history
     const streams = db.prepare(
-      `SELECT id, title, stream_key, is_live, viewer_count, started_at, ended_at
+      `SELECT id, title, stream_key, is_live, viewer_count, started_at, ended_at, scheduled_start_time, category
        FROM streams WHERE user_id = ? ORDER BY created_at DESC LIMIT 10`
     ).all(user.id);
 

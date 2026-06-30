@@ -9,10 +9,12 @@ const streamController = {
   // POST /api/streams  — create a new stream
   createStream(req, res, next) {
     try {
-      const { title, description, category } = req.body;
+      const { title, description, category, isPaid, price, scheduledStartTime } = req.body;
       const userId = req.user.id;
 
-      const stream = streamService.createStream({ userId, title, description, category });
+      const stream = streamService.createStream({ 
+        userId, title, description, category, isPaid, price, scheduledStartTime 
+      });
 
       logger.info(`Stream created: ${stream.stream_key} by ${req.user.username}`);
       res.status(201).json({ stream });

@@ -20,7 +20,7 @@ const streamService = {
 
   // Create a new stream for a user
   // Throws if the user already has a live stream (prevents duplicates)
-  createStream({ userId, title, description, category }) {
+  createStream({ userId, title, description, category, isPaid = false, price = 0, scheduledStartTime = null }) {
     // Enforce one-active-stream-per-user
     const existing = streamService.getActiveStream(userId);
     if (existing) {
@@ -30,19 +30,51 @@ const streamService = {
       throw error;
     }
 
+    // Validate scheduledStartTime: must be at least 24 hours in the future and at most 1 month
+    if (scheduledStartTime) {
+      const scheduled = new Date(scheduledStartTime);
+      const minAllowed = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const maxAllowed = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      if (isNaN(scheduled.getTime())) {
+        const error = new Error('Invalid scheduled start time');
+        error.status = 400;
+        throw error;
+      }
+      if (scheduled < minAllowed) {
+        const error = new Error('Scheduled time must be at least 24 hours from now');
+        error.status = 400;
+        throw error;
+      }
+      if (scheduled > maxAllowed) {
+        const error = new Error('Scheduled time cannot be more than 1 month from now');
+        error.status = 400;
+        throw error;
+      }
+    }
+
+    // Validate price if paid
+    if (isPaid && price < 100) {
+      const error = new Error('Price must be at least $1.00 (100 cents)');
+      error.status = 400;
+      throw error;
+    }
+
     // Generate a unique key used in the stream URL
     // e.g. "a3f9b2c1-..." → viewers go to /stream/a3f9b2c1-...
     const streamKey = uuidv4();
 
     const result = db.prepare(
-      `INSERT INTO streams (user_id, title, description, category, stream_key)
-       VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO streams (user_id, title, description, category, stream_key, is_paid, price, scheduled_start_time)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       userId,
       title || 'My Live Stream',
       description || '',
       category || 'Just Chatting',
-      streamKey
+      streamKey,
+      isPaid ? 1 : 0,
+      isPaid ? Math.max(0, parseInt(price)) : 0,
+      scheduledStartTime || null
     );
 
     return db.prepare(
@@ -53,28 +85,26 @@ const streamService = {
     ).get(result.lastInsertRowid);
   },
 
-  // Get all currently live streams (for homepage)
+  // Get all currently live streams OR upcoming streams (for homepage)
   getLiveStreams({ category } = {}) {
     if (category && category !== 'All') {
       return db.prepare(
         `SELECT s.*, u.username, u.avatar_url
          FROM streams s
          JOIN users u ON s.user_id = u.id
-         WHERE s.is_live = 1 
+         WHERE (s.is_live = 1 OR s.scheduled_start_time > datetime('now'))
            AND s.category = ?
-           AND s.started_at IS NOT NULL
-           AND datetime(s.started_at) > datetime('now', '-24 hours')
-         ORDER BY s.viewer_count DESC, s.started_at DESC`
+           AND (s.started_at IS NOT NULL OR s.scheduled_start_time IS NOT NULL)
+         ORDER BY s.viewer_count DESC, s.started_at DESC, s.scheduled_start_time ASC`
       ).all(category);
     }
     return db.prepare(
       `SELECT s.*, u.username, u.avatar_url
        FROM streams s
        JOIN users u ON s.user_id = u.id
-       WHERE s.is_live = 1
-         AND s.started_at IS NOT NULL
-         AND datetime(s.started_at) > datetime('now', '-24 hours')
-       ORDER BY s.viewer_count DESC, s.started_at DESC`
+       WHERE (s.is_live = 1 OR s.scheduled_start_time > datetime('now'))
+         AND (s.started_at IS NOT NULL OR s.scheduled_start_time IS NOT NULL)
+       ORDER BY s.viewer_count DESC, s.started_at DESC, s.scheduled_start_time ASC`
     ).all();
   },
 
@@ -107,6 +137,21 @@ const streamService = {
       const error = new Error('Stream not found or unauthorized');
       error.status = 404;
       throw error;
+    }
+
+    // Enforce 10-minute window: broadcaster can only go live within
+    // 10 minutes BEFORE the scheduled start time.
+    if (stream.scheduled_start_time) {
+      const scheduledAt = new Date(stream.scheduled_start_time + 'Z');
+      const now = new Date();
+      const minutesUntilStart = (scheduledAt - now) / 60000; // positive = stream is in the future
+      if (minutesUntilStart > 10) {
+        const error = new Error(
+          `You can only start streaming within 10 minutes of your scheduled time. Stream starts at ${scheduledAt.toLocaleString()}.`
+        );
+        error.status = 403;
+        throw error;
+      }
     }
 
     db.prepare(

@@ -93,9 +93,64 @@ function setupSocket(io) {
       }
     };
 
+    // Helper: remove a viewer from a room's tracking, decrement count, and
+    // tell the broadcaster to tear down the stale peer connection so a
+    // later re-join isn't blocked by a "still active" dedupe check.
+    const removeViewerFromRoom = (streamKey) => {
+      const viewers = roomViewers.get(streamKey);
+      if (!viewers || !viewers.has(socket.id)) return;
+
+      viewers.delete(socket.id);
+      const newCount = streamService.updateViewerCount(streamKey, -1);
+      broadcastViewerCount(streamKey, newCount);
+
+      const broadcasterSocketId = broadcasters.get(streamKey);
+      if (broadcasterSocketId) {
+        io.to(broadcasterSocketId).emit('viewer:left', { viewerSocketId: socket.id });
+      }
+      logger.info(`Viewer left stream: ${streamKey}, count now: ${newCount}`);
+    };
+
     // ─── Join a stream room ──────────────────────────────────────────────────
     // Called by BOTH streamers and viewers when they open a stream page
-    socket.on('stream:join', ({ streamKey, isBroadcaster }) => {
+    socket.on('stream:join', ({ streamKey, isBroadcaster, userId }) => {
+      const db = require('../db/database');
+      const stream = streamService.getStreamByKey(streamKey);
+      
+      // If it's a paid stream, verify access
+      if (stream && stream.is_paid && !isBroadcaster && userId !== stream.user_id) {
+        if (!userId) {
+          socket.emit('stream:payment-required', { streamKey });
+          return;
+        }
+        
+        const purchase = db.prepare(
+          'SELECT * FROM stream_purchases WHERE user_id = ? AND stream_id = ? AND status = ?'
+        ).get(userId, stream.id, 'succeeded');
+        
+        if (!purchase) {
+          socket.emit('stream:payment-required', { streamKey });
+          return;
+        }
+      }
+
+      if (isBroadcaster) {
+        // Reject a second concurrent broadcaster connection for the same
+        // stream (e.g. opened in a second tab) instead of silently
+        // overwriting the registration and orphaning the first one.
+        const existingBroadcasterId = broadcasters.get(streamKey);
+        if (existingBroadcasterId && existingBroadcasterId !== socket.id) {
+          const existingSocket = io.sockets.sockets.get(existingBroadcasterId);
+          if (existingSocket && existingSocket.connected) {
+            logger.warn(`Rejected duplicate broadcaster join for ${streamKey} from ${socket.id}`);
+            socket.emit('stream:broadcast-rejected', {
+              reason: 'You are already broadcasting this stream from another tab or device.',
+            });
+            return;
+          }
+        }
+      }
+
       socket.join(streamKey);
       logger.info(`Socket ${socket.id} joined room ${streamKey} as ${isBroadcaster ? 'broadcaster' : 'viewer'}`);
 
@@ -130,6 +185,14 @@ function setupSocket(io) {
     socket.on('viewer:ready', ({ streamKey }) => {
       logger.info(`Viewer ${socket.id} explicitly declared ready for stream room: ${streamKey}`);
       handleViewerReady(streamKey);
+    });
+
+    // Viewer explicitly leaving a stream page (navigating away, clicking
+    // back, etc). Lets them exit and re-enter a stream as many times as
+    // they like without getting stuck behind a stale peer connection.
+    socket.on('stream:leave', ({ streamKey }) => {
+      socket.leave(streamKey);
+      removeViewerFromRoom(streamKey);
     });
 
     // ─── WebRTC Signaling ────────────────────────────────────────────────────
@@ -214,14 +277,10 @@ function setupSocket(io) {
       }
 
       // Check if this was a viewer
-      for (const [streamKey, viewers] of roomViewers.entries()) {
-        if (viewers.has(socket.id)) {
-          viewers.delete(socket.id);
-          const newCount = streamService.updateViewerCount(streamKey, -1);
-
-          // Tell remaining room members and homepage the updated count
-          broadcastViewerCount(streamKey, newCount);
-          logger.info(`Viewer left stream: ${streamKey}, count now: ${newCount}`);
+      for (const streamKey of roomViewers.keys()) {
+        const viewers = roomViewers.get(streamKey);
+        if (viewers && viewers.has(socket.id)) {
+          removeViewerFromRoom(streamKey);
           break;
         }
       }

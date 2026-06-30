@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS streams (
   category TEXT DEFAULT 'Just Chatting',
   stream_key TEXT UNIQUE NOT NULL,  -- unique URL token (e.g. "abc-123-xyz")
   is_live INTEGER DEFAULT 0,        -- SQLite uses 0/1 for boolean
+  is_paid INTEGER DEFAULT 0,
+  price INTEGER DEFAULT 0,          -- Price in cents
+  scheduled_start_time DATETIME DEFAULT NULL,
   viewer_count INTEGER DEFAULT 0,
   peak_viewer_count INTEGER DEFAULT 0,
   thumbnail_url TEXT DEFAULT NULL,
@@ -47,6 +50,20 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_streams_user_id ON streams(user_id);
 CREATE INDEX IF NOT EXISTS idx_streams_is_live ON streams(is_live);
 CREATE INDEX IF NOT EXISTS idx_messages_stream_id ON messages(stream_id);
+
+-- Stream purchases table: tracks who bought which paid stream
+CREATE TABLE IF NOT EXISTS stream_purchases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  stream_id INTEGER NOT NULL,
+  stripe_pi_id TEXT UNIQUE NOT NULL,
+  status TEXT DEFAULT 'pending',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (stream_id) REFERENCES streams(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_stream_purchases_user_stream ON stream_purchases(user_id, stream_id);
 
 -- Safe migrations for existing databases (adding columns if they don't exist yet)
 -- SQLite doesn't support IF NOT EXISTS on ALTER TABLE, so we wrap in a try block at runtime.

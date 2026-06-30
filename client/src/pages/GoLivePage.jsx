@@ -13,9 +13,20 @@ export default function GoLivePage() {
   const [title,       setTitle]       = useState('');
   const [description, setDescription] = useState('');
   const [category,    setCategory]    = useState('Just Chatting');
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState('');
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState('');
+
+  // Minimum allowed schedule time: at least 1 day from now
+  const minScheduleTime = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    .toISOString().slice(0, 16); // format as "YYYY-MM-DDTHH:MM"
+  
+  // Maximum allowed schedule time: at most 1 month (30 days) from now
+  const maxScheduleTime = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    .toISOString().slice(0, 16);
+
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -32,6 +43,28 @@ export default function GoLivePage() {
       setError('Please enter a stream title');
       return;
     }
+
+    // Validate scheduled time: must be at least 24 hours from now
+    if (isScheduled) {
+      if (!scheduledTime) {
+        setError('Please pick a date and time for your scheduled stream.');
+        return;
+      }
+      const chosen = new Date(scheduledTime);
+      const minAllowed = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const maxAllowed = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      if (chosen < minAllowed) {
+        setError('Scheduled time must be at least 24 hours from now.');
+        return;
+      }
+      if (chosen > maxAllowed) {
+        setError('Scheduled time cannot be more than 1 month from now.');
+        return;
+      }
+    }
+
+    // Validate price removed (paid streams disabled)
+
     setLoading(true);
     setError('');
 
@@ -41,11 +74,16 @@ export default function GoLivePage() {
         title:       title.trim(),
         description: description.trim(),
         category,
+        scheduledStartTime: isScheduled ? new Date(scheduledTime).toISOString() : null,
       });
       const { stream_key } = res.data.stream;
 
-      // Navigate to the streamer view with this stream key
-      navigate(`/stream/${stream_key}?mode=broadcast`);
+      if (isScheduled) {
+        navigate('/'); // Go back home if scheduled
+      } else {
+        // Navigate to the streamer view with this stream key
+        navigate(`/stream/${stream_key}?mode=broadcast`);
+      }
     } catch (err) {
       if (err.response?.status === 409 && err.response?.data?.existingStream) {
         // User already has a live stream (e.g. from a stale/forgotten session) —
@@ -139,6 +177,38 @@ export default function GoLivePage() {
             </div>
           </div>
 
+          {/* Settings — Scheduling only */}
+          <div className="bg-dark-base rounded-md p-4">
+            <label className="flex items-center gap-2 text-text-primary text-sm mb-3 font-semibold cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isScheduled}
+                onChange={e => setIsScheduled(e.target.checked)}
+                className="accent-brand w-4 h-4"
+              />
+              Schedule for later
+            </label>
+            {isScheduled && (
+              <div className="mt-2">
+                <input
+                  type="datetime-local"
+                  value={scheduledTime}
+                  min={minScheduleTime}
+                  max={maxScheduleTime}
+                  onChange={e => {
+                    setScheduledTime(e.target.value);
+                    setError('');
+                  }}
+                  className="input-field text-sm bg-dark-surface"
+                  required
+                />
+                <p className="text-xs text-text-muted mt-1">
+                  Must be between <span className="text-yellow-400 font-medium">24 hours</span> and <span className="text-yellow-400 font-medium">1 month</span> from now.
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Info box */}
           <div className="text-xs text-text-muted bg-dark-base rounded-md p-3 space-y-1">
             <p>• Your webcam or screen will be shared with viewers</p>
@@ -146,8 +216,8 @@ export default function GoLivePage() {
             <p>• You control when to start and stop</p>
           </div>
 
-          <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? 'Setting up...' : '🎥 Start Stream'}
+          <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-sm font-bold tracking-wide">
+            {loading ? 'Setting up...' : (isScheduled ? '📅 Schedule Stream' : '🎥 Go Live Now')}
           </button>
         </form>
       </div>

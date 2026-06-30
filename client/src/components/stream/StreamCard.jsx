@@ -68,29 +68,48 @@ export default function StreamCard({ stream }) {
         ) : (
           /* Gradient placeholder when no thumbnail */
           <div className="absolute inset-0 bg-gradient-to-br from-brand/20 via-dark-base to-dark-hover flex flex-col items-center justify-center gap-2 text-text-muted">
-            <span className="text-4xl group-hover:scale-110 transition-transform duration-200">🎥</span>
-            <span className="text-xs font-medium tracking-wide uppercase opacity-60">Live</span>
+            <span className="text-4xl group-hover:scale-110 transition-transform duration-200">
+              {stream.scheduled_start_time ? '📅' : '🎥'}
+            </span>
+            <span className="text-xs font-medium tracking-wide uppercase opacity-60">
+              {stream.scheduled_start_time ? 'Upcoming' : 'Live'}
+            </span>
           </div>
         )}
 
-        {/* Live badge — top left */}
-        <div className="absolute top-2 left-2 flex items-center gap-1.5">
-          <span className="live-badge flex items-center gap-1">
-            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse inline-block" />
-            Live
-          </span>
-          {duration && (
+        {/* Top-left Badges (Live/Upcoming & Duration/Date) */}
+        <div className="absolute top-2 left-2 flex flex-col gap-1.5 items-start">
+          {stream.scheduled_start_time ? (
+            <span className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">
+              📅 Upcoming
+            </span>
+          ) : (
+            <span className="live-badge flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse inline-block" />
+              Live
+            </span>
+          )}
+          
+          {stream.scheduled_start_time ? (
+            <span className="bg-black/70 text-white text-xs px-1.5 py-0.5 rounded font-mono">
+              {new Date(stream.scheduled_start_time).toLocaleString(undefined, {
+                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+              })}
+            </span>
+          ) : duration ? (
             <span className="bg-black/70 text-white text-xs px-1.5 py-0.5 rounded font-mono">
               {duration}
             </span>
-          )}
+          ) : null}
         </div>
 
-        {/* Viewer count — bottom left */}
-        <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
-          <span>👁</span>
-          <span className="font-medium">{stream.viewer_count?.toLocaleString() ?? 0}</span>
-        </div>
+        {/* Viewer count — bottom left (only if live) */}
+        {!stream.scheduled_start_time && (
+          <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
+            <span>👁</span>
+            <span className="font-medium">{stream.viewer_count?.toLocaleString() ?? 0}</span>
+          </div>
+        )}
       </div>
 
       {/* Stream info */}

@@ -52,7 +52,13 @@ export default function Navbar() {
               )}
 
               {/* User menu */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
+                <Link
+                  to={`/profile/${user.username}`}
+                  className="text-text-secondary hover:text-text-primary text-sm font-medium transition-colors hidden sm:block"
+                >
+                  My Channel
+                </Link>
                 <Link
                   to={`/profile/${user.username}`}
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity"
@@ -64,7 +70,6 @@ export default function Navbar() {
                       : user.username[0].toUpperCase()
                     }
                   </div>
-                  <span className="text-text-primary text-sm hidden sm:block">{user.username}</span>
                 </Link>
 
                 <button

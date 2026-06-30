@@ -108,12 +108,52 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* Upcoming streams */}
+      {streams.filter(s => s.scheduled_start_time && !s.started_at && !s.ended_at).length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-text-primary font-semibold mb-3">Upcoming Streams</h2>
+          <div className="flex flex-col gap-3">
+            {streams.filter(s => s.scheduled_start_time && !s.started_at && !s.ended_at).map(stream => {
+              const catColor = CATEGORY_COLORS[stream.category] || CATEGORY_COLORS['Just Chatting'];
+              return (
+                <Link
+                  key={stream.id}
+                  to={`/stream/${stream.stream_key}`}
+                  className="card flex items-center justify-between gap-4 hover:border-brand transition-colors group border-l-4 border-l-purple-500"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <p className="text-text-primary text-sm font-medium truncate group-hover:text-brand transition-colors">
+                        {stream.title}
+                      </p>
+                      {stream.category && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${catColor}`}>
+                          {stream.category}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-text-muted text-xs">
+                      <span>
+                        Scheduled: {new Date(stream.scheduled_start_time).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-purple-400 font-medium text-xs">📅 Upcoming</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Recent streams */}
       <h2 className="text-text-primary font-semibold mb-3">Recent Streams</h2>
 
-      {streams.length === 0 ? (
+      {streams.filter(s => !(s.scheduled_start_time && !s.started_at && !s.ended_at)).length === 0 ? (
         <div className="card text-center py-8 text-text-muted text-sm">
-          No streams yet.
+          No recent streams.
           {isOwnProfile && (
             <div className="mt-3">
               <Link to="/go-live" className="btn-primary text-sm">Go Live Now</Link>
@@ -122,7 +162,7 @@ export default function ProfilePage() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {streams.map(stream => {
+          {streams.filter(s => !(s.scheduled_start_time && !s.started_at && !s.ended_at)).map(stream => {
             const dur = formatDuration(stream.started_at, stream.ended_at);
             const catColor = CATEGORY_COLORS[stream.category] || CATEGORY_COLORS['Just Chatting'];
             return (

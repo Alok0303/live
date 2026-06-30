@@ -22,7 +22,7 @@ export default function HomePage() {
   const [sort,         setSort]         = useState('viewers');
   const [loading,      setLoading]      = useState(true);
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const socket = useSocket();
   const { isStreaming, activeStreamKey } = useBroadcast();
 
@@ -86,11 +86,16 @@ export default function HomePage() {
     };
   }, [socket, fetchStreams]);
 
-  // Client-side sort
-  const sorted = [...streams].sort((a, b) => {
-    if (sort === 'viewers') return (b.viewer_count ?? 0) - (a.viewer_count ?? 0);
-    return new Date(b.started_at) - new Date(a.started_at);
-  });
+  // Client-side sort and filter
+  const allSorted = [...streams]
+    .filter(stream => !(isAuthenticated && user && stream.user_id === user.id))
+    .sort((a, b) => {
+      if (sort === 'viewers') return (b.viewer_count ?? 0) - (a.viewer_count ?? 0);
+      return new Date(b.started_at || b.scheduled_start_time) - new Date(a.started_at || a.scheduled_start_time);
+    });
+
+  const liveStreams = allSorted.filter(s => !s.scheduled_start_time);
+  const upcomingStreams = allSorted.filter(s => s.scheduled_start_time);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -161,12 +166,12 @@ export default function HomePage() {
       {/* Content */}
       {loading ? (
         <LoadingSpinner size="lg" />
-      ) : sorted.length === 0 ? (
+      ) : allSorted.length === 0 ? (
         /* Empty state */
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="text-6xl mb-4">📺</div>
           <h2 className="text-lg font-semibold text-text-primary mb-2">
-            {activeCategory !== 'All' ? `No ${activeCategory} streams live` : 'No streams live right now'}
+            {activeCategory !== 'All' ? `No ${activeCategory} streams live or upcoming` : 'No streams live or upcoming right now'}
           </h2>
           <p className="text-text-secondary text-sm mb-6">
             {activeCategory !== 'All'
@@ -174,18 +179,35 @@ export default function HomePage() {
               : 'Be the first one to go live!'
             }
           </p>
-          {isAuthenticated ? (
-            <Link to="/go-live" className="btn-primary">Start Streaming</Link>
-          ) : (
-            <Link to="/register" className="btn-primary">Sign up to stream</Link>
-          )}
         </div>
       ) : (
-        /* Stream grid */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {sorted.map(stream => (
-            <StreamCard key={stream.id} stream={stream} />
-          ))}
+        <div className="space-y-10">
+          {liveStreams.length > 0 && (
+            <section>
+              <h2 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                Live Now
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {liveStreams.map(stream => (
+                  <StreamCard key={stream.id} stream={stream} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {upcomingStreams.length > 0 && (
+            <section>
+              <h2 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2">
+                📅 Upcoming Streams
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {upcomingStreams.map(stream => (
+                  <StreamCard key={stream.id} stream={stream} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>
