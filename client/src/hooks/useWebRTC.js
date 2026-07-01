@@ -14,9 +14,12 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
   const localStream     = useRef(null);
   const pendingViewers  = useRef([]);
   const socketRef       = useRef(socket); // stable ref to latest socket
+  const mediaRecorderRef = useRef(null);
+  const streamKeyRef    = useRef(streamKey);
 
   // Keep socketRef current without triggering re-renders
   useEffect(() => { socketRef.current = socket; }, [socket]);
+  useEffect(() => { streamKeyRef.current = streamKey; }, [streamKey]);
 
   const [isStreaming,      setIsStreaming]      = useState(false);
   const [isMuted,          setIsMuted]          = useState(false);
@@ -110,6 +113,28 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
       localStream.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       setIsStreaming(true);
+
+      // Start recording for VOD
+      if (isBroadcaster && socketRef.current && streamKeyRef.current) {
+        try {
+          const options = { mimeType: 'video/webm;codecs=vp8,opus' };
+          const recorder = new MediaRecorder(stream, options);
+          mediaRecorderRef.current = recorder;
+
+          recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0 && socketRef.current && streamKeyRef.current) {
+              socketRef.current.emit('stream:record_chunk', {
+                streamKey: streamKeyRef.current,
+                chunk: e.data
+              });
+            }
+          };
+
+          recorder.start(2000); // emit chunk every 2 seconds
+        } catch (err) {
+          console.warn('Failed to start MediaRecorder:', err);
+        }
+      }
 
       // Drain the queue of viewers who joined before stream started
       console.log(`Draining ${pendingViewers.current.length} queued viewers`);
@@ -296,6 +321,15 @@ export function useWebRTC({ socket, streamKey, isBroadcaster }) {
 
   // stopStream is stable — empty deps, uses only refs
   const stopStream = useCallback(() => {
+    // Stop recording
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      if (socketRef.current && streamKeyRef.current) {
+        socketRef.current.emit('stream:record_end', { streamKey: streamKeyRef.current });
+      }
+    }
+    mediaRecorderRef.current = null;
+
     localStream.current?.getTracks().forEach(t => t.stop());
     localStream.current = null;
     pendingViewers.current = [];

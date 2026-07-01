@@ -8,6 +8,12 @@
 const logger = require('../utils/logger');
 const streamService = require('../services/stream.service');
 const registerChatHandlers = require('./chatHandler');
+const fs = require('fs');
+const path = require('path');
+
+// Track write streams for recordings
+// writeStreams: Map<streamKey, fs.WriteStream>
+const writeStreams = new Map();
 
 // Track which sockets are in which rooms
 // roomViewers: Map<streamKey, Set<socketId>>
@@ -246,9 +252,50 @@ function setupSocket(io) {
       socket.to(streamKey).emit('stream:ended', { streamKey });
       // Notify lobby (homepage) so the card disappears instantly
       io.to(LOBBY_ROOM).emit('stream:went_offline', { streamKey });
+      
+      // Close recording if active
+      const ws = writeStreams.get(streamKey);
+      if (ws) {
+        ws.end();
+        writeStreams.delete(streamKey);
+      }
+
       // Clean up
       broadcasters.delete(streamKey);
       roomViewers.delete(streamKey);
+    });
+
+    // ─── Stream Recording ────────────────────────────────────────────────────
+    
+    socket.on('stream:record_chunk', ({ streamKey, chunk }) => {
+      // Validate broadcaster
+      if (broadcasters.get(streamKey) !== socket.id) return;
+      
+      let ws = writeStreams.get(streamKey);
+      if (!ws) {
+        const filePath = path.join(__dirname, '../../uploads', `recording_${streamKey}.webm`);
+        // Ensure uploads dir exists
+        const uploadDir = path.dirname(filePath);
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        ws = fs.createWriteStream(filePath, { flags: 'a' });
+        writeStreams.set(streamKey, ws);
+      }
+      ws.write(chunk);
+    });
+
+    socket.on('stream:record_end', ({ streamKey }) => {
+      if (broadcasters.get(streamKey) !== socket.id) return;
+      
+      const ws = writeStreams.get(streamKey);
+      if (ws) {
+        ws.end();
+        writeStreams.delete(streamKey);
+        const url = `/uploads/recording_${streamKey}.webm`;
+        streamService.saveRecordingUrl(streamKey, url);
+        logger.info(`Recording saved for ${streamKey} at ${url}`);
+      }
     });
 
     // ─── Disconnect cleanup ──────────────────────────────────────────────────
@@ -269,6 +316,17 @@ function setupSocket(io) {
           }
           io.to(streamKey).emit('stream:ended', { streamKey });
           io.to(LOBBY_ROOM).emit('stream:went_offline', { streamKey });
+          
+          // Close recording if active
+          const ws = writeStreams.get(streamKey);
+          if (ws) {
+            ws.end();
+            writeStreams.delete(streamKey);
+            const url = `/uploads/recording_${streamKey}.webm`;
+            streamService.saveRecordingUrl(streamKey, url);
+            logger.info(`Recording saved for ${streamKey} at ${url} (on disconnect)`);
+          }
+
           broadcasters.delete(streamKey);
           roomViewers.delete(streamKey);
           logger.info(`Broadcaster left stream: ${streamKey}`);

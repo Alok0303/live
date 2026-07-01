@@ -188,6 +188,15 @@ const streamService = {
     return { message: 'Stream ended' };
   },
 
+  // Save the recording URL for a stream
+  saveRecordingUrl(streamKey, recordingUrl) {
+    db.prepare(
+      `UPDATE streams
+       SET recording_url = ?
+       WHERE stream_key = ?`
+    ).run(recordingUrl, streamKey);
+  },
+
   // Update viewer count (called by socket events)
   // Returns the new exact count so we can broadcast it
   updateViewerCount(streamKey, delta) {
@@ -213,6 +222,20 @@ const streamService = {
       'Science & Technology', 'Sports', 'Cooking', 'Travel', 'Education',
     ];
     return CATEGORIES;
+  },
+
+  // Get past (ended) streams — actually went live, now finished
+  getPastStreams({ limit = 20 } = {}) {
+    return db.prepare(
+      `SELECT s.*, u.username, u.avatar_url
+       FROM streams s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.is_live = 0
+         AND s.ended_at IS NOT NULL
+         AND s.started_at IS NOT NULL
+       ORDER BY s.ended_at DESC
+       LIMIT ?`
+    ).all(limit);
   },
 };
 

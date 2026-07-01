@@ -47,3 +47,5 @@ server/data/
 server/foobar.db
 server/foobar.db-shm
 server/foobar.db-wal
+
+server/uploads/

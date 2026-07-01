@@ -27,6 +27,7 @@ const migrations = [
   `ALTER TABLE streams ADD COLUMN is_paid INTEGER DEFAULT 0`,
   `ALTER TABLE streams ADD COLUMN price INTEGER DEFAULT 0`,
   `ALTER TABLE streams ADD COLUMN scheduled_start_time DATETIME DEFAULT NULL`,
+  `ALTER TABLE streams ADD COLUMN recording_url TEXT DEFAULT NULL`,
 ];
 
 for (const sql of migrations) {

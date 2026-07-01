@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS streams (
   viewer_count INTEGER DEFAULT 0,
   peak_viewer_count INTEGER DEFAULT 0,
   thumbnail_url TEXT DEFAULT NULL,
+  recording_url TEXT DEFAULT NULL,
   started_at DATETIME DEFAULT NULL,
   ended_at DATETIME DEFAULT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

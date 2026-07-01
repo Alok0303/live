@@ -50,8 +50,9 @@ export default function StreamPage() {
   const [streamEnded, setStreamEnded] = useState(false);
   const [isLive, setIsLive]           = useState(false);
   const [pageError, setPageError]     = useState('');
-  const isBroadcaster = searchParams.get('mode') === 'broadcast' ||
-                        (user && stream && user.id === stream.user_id);
+  const isBroadcaster = (searchParams.get('mode') === 'broadcast' || 
+                        (user && stream && user.id === stream.user_id)) && 
+                        !stream?.recording_url;
   const [duration, setDuration] = useState(0);
   const durationRef = useRef(null);
 
@@ -239,7 +240,7 @@ export default function StreamPage() {
                 )}
                 {isStreaming && (
                   <div className="absolute top-3 left-3 flex items-center gap-2">
-                    <span className="flex items-center gap-1.5 bg-brand text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-[0_0_12px_rgba(229,9,20,0.7)]">
+                    <span className="flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">
                       <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
                     </span>
                     <span className="bg-black/80 backdrop-blur-sm text-white text-xs font-mono px-2 py-0.5 rounded-full border border-white/10">
@@ -266,6 +267,14 @@ export default function StreamPage() {
                     The stream will begin automatically when the broadcaster goes live.
                   </p>
                 </div>
+              </div>
+            ) : stream?.recording_url && !isLive ? (
+              <div className="relative w-full aspect-video bg-black">
+                <video 
+                  src={stream.recording_url} 
+                  controls 
+                  className="w-full h-full object-contain bg-black"
+                />
               </div>
             ) : (
               <VideoPlayer videoRef={remoteVideoRef} connectionState={connectionState} isLive={isLive} />

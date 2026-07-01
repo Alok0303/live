@@ -1,5 +1,4 @@
-// HomePage.jsx
-// Netflix-style homepage with horizontal category rows, Top 10, and fancy empty states.
+// HomePage.jsx — Punchline-style homepage
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import apiClient from '../api/apiClient';
@@ -10,88 +9,146 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useBroadcast } from '../context/BroadcastContext';
 
-// All possible categories — always show a row for each
-const ALL_CATEGORIES = [
-  'Just Chatting', 'Gaming', 'Music', 'Art', 'IRL',
-  'Science & Technology', 'Sports', 'Cooking', 'Travel', 'Education',
-];
-
-// Fancy empty-state messages per category
-const EMPTY_MESSAGES = {
-  'Just Chatting':        { emoji: '💬', text: 'The lounge is quiet... for now.',   sub: 'No one is chatting live. Be the voice of the internet!' },
-  'Gaming':               { emoji: '🎮', text: 'No players in the arena.',            sub: 'The leaderboard is empty. Start a stream and claim your throne!' },
-  'Music':                { emoji: '🎵', text: 'The stage is empty.',                 sub: 'Drop a beat. The crowd is waiting for you!' },
-  'Art':                  { emoji: '🎨', text: 'The canvas is blank.',                sub: 'No artists live right now. Inspire the world with your work!' },
-  'IRL':                  { emoji: '🌍', text: 'No adventures happening live.',       sub: 'Get out there and show us your world!' },
-  'Science & Technology': { emoji: '🔬', text: 'The lab is dark.',                   sub: 'No tech streams live. Fire up the experiments!' },
-  'Sports':               { emoji: '🏆', text: 'No games on the field.',              sub: 'The stadium is empty. Show us what you\'ve got!' },
-  'Cooking':              { emoji: '🍳', text: 'The kitchen is cold.',                sub: 'No chefs live right now. Fire up the stove!' },
-  'Travel':               { emoji: '✈️', text: 'No explorers on the road.',          sub: 'The world is huge. Start exploring and bring us along!' },
-  'Education':            { emoji: '📚', text: 'Class is out.',                       sub: 'No educators live right now. Share your knowledge!' },
-};
-
-function CategoryEmptyState({ category }) {
-  const msg = EMPTY_MESSAGES[category] || { emoji: '📡', text: `No ${category} streams live.`, sub: 'Check back later or be the first to go live!' };
+// ─── Section Row ─────────────────────────────────────────────────────────────
+function SectionRow({ icon, title, streams, emptyMsg, emptyIcon }) {
   return (
-    <div className="flex items-center gap-6 px-4 py-6 ml-2 rounded-lg bg-dark-surface/50 border border-dashed border-dark-border min-w-[340px] max-w-lg">
-      <span className="text-5xl opacity-60">{msg.emoji}</span>
-      <div>
-        <p className="text-text-primary font-semibold text-sm">{msg.text}</p>
-        <p className="text-text-muted text-xs mt-1">{msg.sub}</p>
+    <section className="mb-10">
+      <div className="flex items-center justify-between mb-4 px-0">
+        <div className="flex items-center gap-2">
+          {icon && <span className="text-brand">{icon}</span>}
+          <h2 className="text-white font-bold uppercase tracking-widest text-sm">{title}</h2>
+        </div>
+        {streams.length > 3 && (
+          <button className="text-text-muted hover:text-white text-xs font-medium transition-colors flex items-center gap-1">
+            See all <span className="text-lg leading-none">›</span>
+          </button>
+        )}
       </div>
-    </div>
-  );
-}
 
-// Netflix-style Top 10 number badge
-function Top10Card({ stream, rank }) {
-  return (
-    <div className="flex-shrink-0 w-[85vw] sm:w-[280px] md:w-[310px] snap-start relative">
-      {/* Big rank number behind card */}
-      <div
-        className="absolute -left-4 bottom-0 z-0 select-none pointer-events-none"
-        style={{
-          fontSize: '9rem',
-          fontWeight: 900,
-          lineHeight: 1,
-          color: 'transparent',
-          WebkitTextStroke: '2px rgba(229,9,20,0.55)',
-          fontFamily: 'serif',
-        }}
-      >
-        {rank}
-      </div>
-      <div className="relative z-10 ml-8">
-        <StreamCard stream={stream} />
-      </div>
-    </div>
-  );
-}
-
-function CategoryRow({ title, streams, emptyCategory, icon }) {
-  return (
-    <section>
-      <h2 className="text-lg md:text-xl font-bold text-white mb-3 px-2 flex items-center gap-2">
-        {icon && <span>{icon}</span>}
-        {title}
-      </h2>
-      <div className="flex overflow-x-auto gap-4 pb-4 pt-1 px-2 row-scroll snap-x">
-        {streams.length > 0 ? (
-          streams.map(stream => (
-            <div key={stream.id} className="w-[85vw] sm:w-[320px] md:w-[350px] flex-shrink-0 snap-start">
+      {streams.length > 0 ? (
+        <div className="flex overflow-x-auto gap-4 pb-2 row-scroll snap-x -mx-0">
+          {streams.map(stream => (
+            <div key={stream.id} className="flex-shrink-0 w-[85vw] sm:w-[260px] md:w-[280px] snap-start">
               <StreamCard stream={stream} />
             </div>
-          ))
-        ) : (
-          <CategoryEmptyState category={emptyCategory || title} />
-        )}
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center gap-4 bg-dark-card border border-dark-border rounded-lg px-6 py-5">
+          <span className="text-4xl opacity-40">{emptyIcon || '📺'}</span>
+          <p className="text-text-muted text-sm">{emptyMsg || 'Nothing here yet.'}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── Pricing Section ─────────────────────────────────────────────────────────
+function PricingSection() {
+  const plans = [
+    {
+      name: 'Starter',
+      price: 'Free',
+      desc: 'For casual viewers',
+      features: ['Watch free live streams', 'Basic chat', 'HD quality'],
+      cta: 'Get Started',
+      href: '/register',
+      highlight: false,
+    },
+    {
+      name: 'Pro',
+      price: '$9',
+      period: '/month',
+      desc: 'For dedicated fans',
+      features: ['Everything in Starter', 'All live streams', 'No ads', 'Priority chat'],
+      cta: 'Go Pro',
+      href: '/register',
+      highlight: true,
+      badge: 'Most Popular',
+    },
+    {
+      name: 'Creator',
+      price: '$19',
+      period: '/month',
+      desc: 'For streamers',
+      features: ['Everything in Pro', 'Go Live unlimited', 'Analytics dashboard', 'Custom channel page'],
+      cta: 'Start Creating',
+      href: '/go-live',
+      highlight: false,
+    },
+  ];
+
+  return (
+    <section className="py-16 border-t border-dark-border/40 mt-8">
+      <div className="text-center mb-12">
+        <p className="text-brand text-xs font-bold uppercase tracking-widest mb-2">Pick the</p>
+        <h2 className="text-white text-4xl font-black uppercase tracking-tight">Choose Your Plan</h2>
+        <p className="text-text-muted text-sm mt-3 max-w-md mx-auto">
+          Subscribe for all access, or stream for free. Cancel anytime.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
+        {plans.map(plan => (
+          <div
+            key={plan.name}
+            className={`relative rounded-lg p-6 border transition-all duration-200 ${
+              plan.highlight
+                ? 'bg-dark-card border-brand shadow-[0_0_40px_rgba(255,184,0,0.15)]'
+                : 'bg-dark-card border-dark-border'
+            }`}
+          >
+            {plan.badge && (
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span className="bg-brand text-black text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
+                  {plan.badge}
+                </span>
+              </div>
+            )}
+            <h3 className="text-white font-bold text-lg">{plan.name}</h3>
+            <p className="text-text-muted text-xs mt-0.5 mb-4">{plan.desc}</p>
+            <div className="flex items-end gap-1 mb-5">
+              <span className="text-white text-3xl font-black">{plan.price}</span>
+              {plan.period && <span className="text-text-muted text-sm mb-0.5">{plan.period}</span>}
+            </div>
+            <ul className="space-y-2 mb-6">
+              {plan.features.map(f => (
+                <li key={f} className="flex items-start gap-2 text-text-secondary text-xs">
+                  <span className="text-brand mt-0.5">✓</span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <Link
+              to={plan.href}
+              className={`block text-center py-2.5 rounded font-bold text-sm transition-all duration-150 ${
+                plan.highlight
+                  ? 'bg-brand hover:bg-brand-light text-black'
+                  : 'bg-dark-hover hover:bg-white/10 text-white border border-dark-border'
+              }`}
+            >
+              {plan.cta}
+            </Link>
+          </div>
+        ))}
+      </div>
+
+      {/* Trust badges */}
+      <div className="flex items-center justify-center gap-8 mt-10 flex-wrap">
+        {['No contracts', 'Cancel anytime', 'Secure payments', 'Instant access'].map(t => (
+          <div key={t} className="flex items-center gap-1.5 text-text-muted text-xs">
+            <span className="text-brand">✓</span> {t}
+          </div>
+        ))}
       </div>
     </section>
   );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const [streams, setStreams] = useState([]);
+  const [pastStreams, setPastStreams] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const { isAuthenticated, user } = useAuth();
@@ -99,9 +156,13 @@ export default function HomePage() {
   const { isStreaming, activeStreamKey } = useBroadcast();
 
   const fetchStreams = useCallback(() => {
-    return apiClient.get('/streams')
-      .then(res => setStreams(res.data.streams))
-      .catch(err => console.error('Failed to fetch streams:', err));
+    return Promise.all([
+      apiClient.get('/streams'),
+      apiClient.get('/streams/past')
+    ]).then(([liveRes, pastRes]) => {
+      setStreams(liveRes.data.streams || []);
+      setPastStreams(pastRes.data.streams || []);
+    }).catch(err => console.error('Failed to fetch streams:', err));
   }, []);
 
   useEffect(() => {
@@ -114,17 +175,14 @@ export default function HomePage() {
   useEffect(() => {
     if (!socket) return;
     socket.emit('lobby:join');
-
     const onViewerUpdate = ({ streamKey, count }) =>
       setStreams(prev => prev.map(s => s.stream_key === streamKey ? { ...s, viewer_count: count } : s));
     const onWentLive = () => fetchStreams();
     const onWentOffline = ({ streamKey }) =>
       setStreams(prev => prev.filter(s => s.stream_key !== streamKey));
-
     socket.on('stream:viewer_update', onViewerUpdate);
     socket.on('stream:went_live', onWentLive);
     socket.on('stream:went_offline', onWentOffline);
-
     return () => {
       socket.emit('lobby:leave');
       socket.off('stream:viewer_update', onViewerUpdate);
@@ -133,129 +191,175 @@ export default function HomePage() {
     };
   }, [socket, fetchStreams]);
 
-  const displayableStreams = useMemo(() =>
+  const displayable = useMemo(() =>
     streams.filter(s => !(isAuthenticated && user && s.user_id === user.id)),
     [streams, isAuthenticated, user]
   );
 
   const liveStreams = useMemo(() =>
-    displayableStreams
-      .filter(s => !s.scheduled_start_time)
+    displayable.filter(s => !s.scheduled_start_time && s.is_live)
       .sort((a, b) => (b.viewer_count ?? 0) - (a.viewer_count ?? 0)),
-    [displayableStreams]
+    [displayable]
   );
 
   const upcomingStreams = useMemo(() =>
-    displayableStreams
-      .filter(s => s.scheduled_start_time)
+    displayable.filter(s => s.scheduled_start_time)
       .sort((a, b) => new Date(a.scheduled_start_time) - new Date(b.scheduled_start_time)),
-    [displayableStreams]
+    [displayable]
   );
 
-  // Top 10: all live streams sorted by viewers, capped at 10
-  const top10 = liveStreams.slice(0, 10);
+  // Hero = top live stream
+  const heroStream = liveStreams[0] || upcomingStreams[0] || null;
 
-  // Build category map from live streams
+  // Category map (only live)
+  const ALL_CATEGORIES = ['Just Chatting','Gaming','Music','Art','IRL','Science & Technology','Sports','Cooking','Travel','Education'];
   const categoryMap = useMemo(() => {
-    const map = {};
+    const m = {};
     liveStreams.forEach(s => {
       const cat = s.category || 'Other';
-      if (!map[cat]) map[cat] = [];
-      map[cat].push(s);
+      if (!m[cat]) m[cat] = [];
+      m[cat].push(s);
     });
-    return map;
+    return m;
   }, [liveStreams]);
 
-  // Split categories: ones with live streams first, empty ones at the bottom
-  const populatedCats = ALL_CATEGORIES.filter(cat => (categoryMap[cat] || []).length > 0);
-  const emptyCats = ALL_CATEGORIES.filter(cat => (categoryMap[cat] || []).length === 0);
+  const populatedCats = ALL_CATEGORIES.filter(c => categoryMap[c]?.length > 0);
 
   return (
-    <div className="min-h-screen bg-dark-base text-text-primary overflow-x-hidden">
+    <div className="min-h-screen bg-dark-base text-text-primary">
 
-      {loading ? (
-        <div className="pt-32"><LoadingSpinner size="lg" /></div>
-      ) : (
-        <div className="pb-24 pt-20 space-y-10 px-4 lg:px-10">
-
-          {/* ── Top 10 Row ─────────────────────────────────────────── */}
-          {top10.length > 0 ? (
-            <section>
-              <h2 className="text-lg md:text-xl font-bold text-white mb-3 px-2 flex items-center gap-2">
-                <span className="text-brand">🏆</span> Top 10 Streams
-              </h2>
-              <div className="flex overflow-x-auto gap-6 pb-4 pt-1 px-2 row-scroll snap-x">
-                {top10.map((stream, i) => (
-                  <Top10Card key={stream.id} stream={stream} rank={i + 1} />
-                ))}
-              </div>
-            </section>
+      {/* ── Hero Section ──────────────────────────────────────────────── */}
+      {!loading && heroStream && (
+        <div className="relative w-full" style={{ minHeight: '420px' }}>
+          {/* Background image */}
+          {heroStream.thumbnail_url ? (
+            <div className="absolute inset-0">
+              <img
+                src={heroStream.thumbnail_url}
+                alt={heroStream.title}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-dark-base via-dark-base/30 to-transparent" />
+            </div>
           ) : (
-            <section>
-              <h2 className="text-lg md:text-xl font-bold text-white mb-3 px-2 flex items-center gap-2">
-                <span className="text-brand">🏆</span> Top 10 Streams
-              </h2>
-              <div className="flex overflow-x-auto gap-4 pb-4 pt-1 px-2 row-scroll snap-x">
-                <div className="flex items-center gap-6 px-6 py-6 rounded-lg bg-dark-surface/50 border border-dashed border-dark-border min-w-[360px]">
-                  <span className="text-5xl opacity-60">🏆</span>
-                  <div>
-                    <p className="text-text-primary font-semibold text-sm">The leaderboard is empty.</p>
-                    <p className="text-text-muted text-xs mt-1">No live streams yet. Start one and claim the #1 spot!</p>
-                  </div>
-                </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-[#111] to-dark-base" />
+          )}
+
+          {/* Hero content */}
+          <div className="relative z-10 max-w-3xl px-6 lg:px-10 pt-28 pb-16">
+            {/* Live badge */}
+            {!heroStream.scheduled_start_time && (
+              <div className="flex items-center gap-3 mb-3">
+                <span className="live-badge flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
+                </span>
+                <span className="text-text-secondary text-xs font-medium">
+                  {heroStream.viewer_count?.toLocaleString() ?? 0} watching now
+                </span>
               </div>
-            </section>
-          )}
+            )}
 
-          {/* ── Populated Category Rows (streams exist) ─────────────── */}
-          {populatedCats.map(cat => (
-            <CategoryRow
-              key={cat}
-              title={cat}
-              streams={categoryMap[cat]}
-              emptyCategory={cat}
+            {/* Title */}
+            <h1 className="text-white text-4xl md:text-5xl font-black leading-tight mb-3">
+              {heroStream.title}
+            </h1>
+
+            {/* Subtitle */}
+            <p className="text-text-secondary text-sm mb-2">
+              {heroStream.username}
+              {heroStream.category && ` · ${heroStream.category}`}
+            </p>
+
+            {/* Buttons */}
+            <div className="flex items-center gap-3 mt-6">
+              <Link
+                to={`/stream/${heroStream.stream_key}`}
+                className="flex items-center gap-2 bg-brand hover:bg-brand-light text-black font-bold px-6 py-3 rounded transition-all hover:scale-105"
+              >
+                ▶ {heroStream.scheduled_start_time ? 'View Details' : 'Join Live'}
+              </Link>
+              <Link
+                to={`/stream/${heroStream.stream_key}`}
+                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white font-semibold px-6 py-3 rounded border border-white/20 transition-all"
+              >
+                More Info
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Main content ──────────────────────────────────────────────── */}
+      <div className={`relative z-20 px-6 lg:px-10 ${heroStream ? 'pt-8 mt-2' : 'pt-20'} pb-16`}>
+
+        {loading ? (
+          <div className="flex justify-center py-32">
+            <LoadingSpinner size="lg" />
+          </div>
+        ) : (
+          <>
+            {/* Live Right Now */}
+            <SectionRow
+              icon="🔴"
+              title="Live Right Now"
+              streams={liveStreams}
+              emptyIcon="📡"
+              emptyMsg="No one is live right now. Be the first!"
             />
-          ))}
 
-          {/* ── Upcoming Premieres Row ──────────────────────────────── */}
-          <section>
-            <h2 className="text-lg md:text-xl font-bold text-white mb-3 px-2 flex items-center gap-2">
-              <span className="text-brand">📅</span> Upcoming Premieres
-            </h2>
-            <div className="flex overflow-x-auto gap-4 pb-4 pt-1 px-2 row-scroll snap-x">
-              {upcomingStreams.length > 0 ? (
-                upcomingStreams.map(stream => (
-                  <div key={stream.id} className="w-[85vw] sm:w-[320px] md:w-[350px] flex-shrink-0 snap-start">
-                    <StreamCard stream={stream} />
-                  </div>
-                ))
-              ) : (
-                <div className="flex items-center gap-6 px-6 py-6 rounded-lg bg-dark-surface/50 border border-dashed border-dark-border min-w-[360px]">
-                  <span className="text-5xl opacity-60">📅</span>
-                  <div>
-                    <p className="text-text-primary font-semibold text-sm">Nothing scheduled yet.</p>
-                    <p className="text-text-muted text-xs mt-1">Be the first to schedule a premiere and build the hype!</p>
-                  </div>
-                </div>
-              )}
+            {/* Upcoming Shows */}
+            <SectionRow
+              icon="📅"
+              title="Upcoming Shows"
+              streams={upcomingStreams}
+              emptyIcon="📅"
+              emptyMsg="Nothing scheduled yet. Plan your next stream!"
+            />
+
+            {/* Past Shows */}
+            <SectionRow
+              icon="🕒"
+              title="Past Shows – Rent or Subscribe"
+              streams={pastStreams}
+              emptyIcon="🎬"
+              emptyMsg="No past streams available."
+            />
+
+            {/* Category rows — only populated ones */}
+            {populatedCats.map(cat => (
+              <SectionRow
+                key={cat}
+                title={cat}
+                streams={categoryMap[cat]}
+                emptyIcon="🎬"
+                emptyMsg={`No ${cat} streams live right now.`}
+              />
+            ))}
+
+            {/* Pricing */}
+            <PricingSection />
+          </>
+        )}
+      </div>
+
+      {/* ── Sticky bottom CTA (for non-authenticated) ─────────────────── */}
+      {!isAuthenticated && (
+        <div className="sticky bottom-0 z-40 bg-dark-card border-t border-dark-border/50">
+          <div className="px-6 lg:px-10 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-brand/20 rounded flex items-center justify-center flex-shrink-0">
+                <span className="text-brand text-sm">🔒</span>
+              </div>
+              <div>
+                <p className="text-white text-sm font-bold leading-none">Some streams require a subscription</p>
+                <p className="text-text-muted text-xs mt-0.5">Sign up for full access to all live and upcoming shows.</p>
+              </div>
             </div>
-          </section>
-
-          {/* ── Empty Category Rows (at bottom) ─────────────────────── */}
-          {emptyCats.length > 0 && (
-            <div className="space-y-10 border-t border-dark-border/40 pt-10">
-              <p className="text-text-muted text-xs uppercase tracking-widest px-2">More Categories</p>
-              {emptyCats.map(cat => (
-                <CategoryRow
-                  key={cat}
-                  title={cat}
-                  streams={[]}
-                  emptyCategory={cat}
-                />
-              ))}
-            </div>
-          )}
-
+            <Link to="/register" className="btn-primary text-xs flex-shrink-0">
+              Get Started →
+            </Link>
+          </div>
         </div>
       )}
     </div>

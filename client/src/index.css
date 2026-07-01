@@ -3,95 +3,78 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import Inter font from Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
-/* Global base styles */
 @layer base {
   body {
     @apply bg-dark-base text-text-primary font-sans;
     font-size: 14px;
   }
 
-  /* Custom scrollbar styling (dark theme) */
-  ::-webkit-scrollbar {
-    width: 8px;
-  }
-  ::-webkit-scrollbar-track {
-    @apply bg-dark-surface;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-dark-border rounded-full;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-dark-hover;
-  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-dark-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-dark-hover; }
 }
 
-/* Reusable component classes */
 @layer components {
-  /* Primary button style */
+  /* Primary amber button — Punchline style */
   .btn-primary {
-    @apply bg-brand hover:bg-brand-light text-white font-bold
-           px-4 py-2 rounded-md transition-colors duration-150
+    @apply bg-brand hover:bg-brand-light text-black font-bold
+           px-5 py-2.5 rounded transition-all duration-150
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
-  /* Secondary button style */
+  /* Secondary / ghost button */
   .btn-secondary {
-    @apply bg-dark-surface hover:bg-dark-hover text-text-primary font-semibold
-           px-4 py-2 rounded-md border border-dark-border transition-colors duration-150;
+    @apply bg-white/10 hover:bg-white/20 text-white font-semibold
+           px-5 py-2.5 rounded border border-white/20 transition-all duration-150;
   }
 
-  /* Input field style */
+  /* Input field */
   .input-field {
     @apply bg-dark-surface border border-dark-border text-text-primary
-           rounded-md px-3 py-2 w-full
+           rounded px-3 py-2.5 w-full
            focus:outline-none focus:border-brand
            placeholder:text-text-muted
            transition-colors duration-150;
   }
 
-  /* Card container style */
+  /* Card */
   .card {
-    @apply bg-dark-surface border border-dark-border rounded-lg p-4;
+    @apply bg-dark-card border border-dark-border rounded-lg p-4;
   }
 
-  /* Live badge */
+  /* Red live badge */
   .live-badge {
-    @apply bg-red-600 text-white text-xs font-bold
-           px-2 py-0.5 rounded uppercase tracking-wide;
+    @apply bg-red-600 text-white text-[10px] font-bold
+           px-2 py-0.5 rounded-sm uppercase tracking-widest;
+  }
+
+  /* Section heading row */
+  .section-heading {
+    @apply flex items-center gap-2 text-white font-bold uppercase tracking-widest text-sm mb-4;
   }
 }
 
-/* Utility: hide scrollbar but keep scroll behavior */
 @layer utilities {
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-  /* Netflix style row scrollbar */
-  .row-scroll::-webkit-scrollbar {
-    height: 6px;
-  }
-  .row-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .row-scroll::-webkit-scrollbar-thumb {
-    background: #333;
-    border-radius: 4px;
-  }
-  .row-scroll::-webkit-scrollbar-thumb:hover {
-    background: #666;
-  }
+  .row-scroll::-webkit-scrollbar { height: 4px; }
+  .row-scroll::-webkit-scrollbar-track { background: transparent; }
+  .row-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+  .row-scroll::-webkit-scrollbar-thumb:hover { background: #555; }
 
   .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }

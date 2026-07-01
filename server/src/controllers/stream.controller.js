@@ -114,6 +114,16 @@ const streamController = {
     }
   },
 
+  // GET /api/streams/past  — get all past streams
+  getPastStreams(req, res, next) {
+    try {
+      const streams = streamService.getPastStreams();
+      res.json({ streams });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   // GET /api/streams/my/active  — get current user's active live stream (if any)
   getActiveStream(req, res, next) {
     try {

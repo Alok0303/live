@@ -21,6 +21,7 @@ const upload = multer({ storage });
 // Public routes
 router.get('/categories',         streamController.getCategories);   // list of categories
 router.get('/',                   streamController.getLiveStreams);   // homepage feed
+router.get('/past',               streamController.getPastStreams);   // past streams
 router.get('/:streamKey',         streamController.getStream);       // single stream info
 
 // Protected routes (must be logged in)
